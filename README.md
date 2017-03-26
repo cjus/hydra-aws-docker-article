@@ -57,7 +57,7 @@ At this point you should be able to open your web browser and point it to http:/
 
 ### Sharing your containers
 
-Now that you've created a container you can share it with others by publishing it to a container repository such as Docker Hub. You can setup a free account  - but that will only allow you to publish unlimited public containers, but only one private container. To maintain multiple private containers you'll need a paid subscription. However, the plans start as low as $7 per month.
+Now that you've created a container you can share it with others by publishing it to a container repository such as Docker Hub. You can setup a free account  which will allow you to publish unlimited public containers, but you'll only be able to publish one private container. To maintain multiple private containers you'll need a paid subscription. However, the plans start as low as $7 per month.
 
 You, or others, can pull a container image from your docker hub repo using one simple command:
 
