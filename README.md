@@ -29,11 +29,28 @@ Download and install the Docker community edition from docker.com 
 * `cd` into an existing project folder
 * Build a simple service
 * Create a Dockerfile (see example below)
-* Run: `docker build -t myservice:0.0.1 .` Don't forget the trailing period which specifies the working directory.
+* Run: `docker build -t my-service:0.0.1 .` Don't forget the trailing period which specifies the working directory.
 
-The tag for the command above specifies your service name and version. It's a good practice to prefix that entry with your username or company name. For example: `cjus/myservice:0.0.1` If you're using Docker hub to store your containers then you'll need definitely need to prefix your container name. We'll touch on Docker hub a bit more later.
+The tag for the command above specifies your service name and version. It's a good practice to prefix that entry with your username or company name. For example: `cjus/my-service:0.0.1` If you're using Docker hub to store your containers then you'll need definitely need to prefix your container name. We'll touch on Docker hub a bit more later.
 
 ### Building a simple microservice
+
+To build our simple microservice we'll use a package called Hydra-express, which creates a microservice using Hydra and ExpressJS. Why not just use ExpressJS? By itself, an ExpressJS app only allows you to build a Node server and add API routes. However, that basic server isn't a complete microservice. In comparison, a Hydra-express app includes functionality to discover other Hydra apps and load balance requests between them using presence and health information. Those capabilities will become important when we consider applications running on AWS and in a Docker Swarm cluster. Building Hydra and Hydra-Express apps is covered in more detail in my earlier [RisingStack articles](https://community.risingstack.com/author/carlos/) on Hydra.
+
+To avoid manually typing the code for a basic hydra-express app we'll install a [Yeoman](http://yeoman.io/learning/) and Eric Adum's excellent hydra app generator.
+
+```shell
+$ sudo npm install -g yo generator-fwsp-hydra
+```
+
+We then invoke Yeoman and the hydra generator.
+
+```shell
+$ yo fwsp-hydra
+```
+
+Name your microservice `my` and step through the defaults. You'll end up with a folder called my-service which you can build using `npm install`.
+
 
 
 ### Creating the Dockerfile
@@ -58,7 +75,7 @@ Other important entry, EXPOSE, is the port that our Express app listens on. The 
 We use the docker run command to invoke our container and service. The `-d` command specifies that we want to run in daemon (background mode) and the `-p` command publishes our services ports. The port syntax says: "on this machine use port 8080 and map that to the containers internal port" which is also 8080. We also name the service using the  `--name` flag  -  that's useful otherwise Docker will provide a random name for our running container. The last portion shown below is the service name and version. Ideally that should match the version in your package.json file.
 
 ```
-$ docker run -d -p 8080:8080 --name myservice myservice:0.0.1
+$ docker run -d -p 8080:8080 --name my-service my-service:0.0.1
 ```
 
 ### Communicating with our container
@@ -72,5 +89,5 @@ Now that you've created a container you can share it with others by publishing i
 You, or others, can pull a container image from your docker hub repo using one simple command:
 
 ```
-$ docker pull cjus/myservice:0.0.1
+$ docker pull cjus/my-service:0.0.1
 ```
