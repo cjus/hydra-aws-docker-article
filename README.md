@@ -1,4 +1,10 @@
-# Deploying Node ExpressJS Microservices to AWS using Docker and Docker Swarm Mode
+# Deploying Node Microservices to AWS using Docker
+
+* Introduction to docker and building containers
+* Running containers on AWS
+* Building and working with a swarm cluster
+
+---
 
 In this post we'll look at deploying microservices to Amazon's AWS using Docker and to a cluster using Docker Swarm mode. Because doing such a thing is plagued with lots of complexity, we're going to use a microservices library called [Hydra](https://www.npmjs.com/package/hydra)  -  which will greatly simply the effort while offering considerable scalability benefits. Even if you choose not to use Hydra, the information in this post should help you get started with AWS and Docker.
 
@@ -20,11 +26,15 @@ Packaging your ExpressJS applications inside of a Docker container is straightfo
 
 Download and install the Docker community edition from docker.com 
 
-* `cd` into an existing project folder.
+* `cd` into an existing project folder
+* Build a simple service
 * Create a Dockerfile (see example below)
 * Run: `docker build -t myservice:0.0.1 .` Don't forget the trailing period which specifies the working directory.
 
 The tag for the command above specifies your service name and version. It's a good practice to prefix that entry with your username or company name. For example: `cjus/myservice:0.0.1` If you're using Docker hub to store your containers then you'll need definitely need to prefix your container name. We'll touch on Docker hub a bit more later.
+
+### Building a simple microservice
+
 
 ### Creating the Dockerfile
 
