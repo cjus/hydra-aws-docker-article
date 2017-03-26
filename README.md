@@ -10,36 +10,38 @@ In this two part post we'll look at building and deploying microservices to Amaz
 
 Because doing such a thing is plagued with lots of complexity, we're going to use a microservices library called [Hydra](https://www.npmjs.com/package/hydra)  -  which will greatly simply the effort while offering considerable scalability benefits. Even if you choose not to use Hydra, the information in this post should help you get started with AWS and Docker.
 
-A quick recap if you're wondering what this Hydra thing is. Hydra is a NodeJS package which facilitates building distributed applications such as Microservices. Hydra offers features such as service discovery, distributed messaging, message load balancing, logging, presence, and health monitoring. As you can imagine, those features would be of use for any service living on cloud infrastructure.
+A quick recap if you're wondering what this Hydra thing is. Hydra is a NodeJS package which facilitates building distributed applications such as Microservices. Hydra offers features such as service discovery, distributed messaging, message load balancing, logging, presence, and health monitoring. As you can imagine, those features would benefit any service living on cloud infrastructure.
 
-You don't need to really know how to use Hydra to get a lot out of this article - but if you're interested then you can learn more by reviewing two earlier posts on Hydra here on RisingStack. The first is [Building ExpressJS-based microservices using Hydra](https://community.risingstack.com/tutorial-building-expressjs-based-microservices-using-hydra/), and the second is [Building a Microservices Example Game with Distributed Messaging](https://community.risingstack.com/building-a-microservices-example-game-with-distributed-messaging/). A microservice game? Seriously? For the record, I do reject claims that I have too much time on my hands. 😃
+If you'd like learn more, see two of my earlier posts here on RisingStack. The first is [Building ExpressJS-based microservices using Hydra](https://community.risingstack.com/tutorial-building-expressjs-based-microservices-using-hydra/), and the second is [Building a Microservices Example Game with Distributed Messaging](https://community.risingstack.com/building-a-microservices-example-game-with-distributed-messaging/). A microservice game? Seriously? For the record, I do reject claims that I have too much time on my hands. 😃
 
-We'll begin by recapping docker containerization  - just in case you're new to this. Feel free to skim or skip over the next section, if you're already familiar with docker.
+We'll begin by recapping docker containerization  - just in case you're new to this. Feel free to skim or skip over the next section, if you're already familiar with Docker.
 
-### Containerization?
+## Containerization?
 
-Virtual Machine software has ushered in the age of containerization where applications can be packaged as containers making them portable and easier to manage. Docker is a significant evolution of that trend.
+Virtual Machine software has ushered in the age of software containerization where applications can be packaged as containers making them portable and easier to manage. Docker is a significant evolution of that trend.
 
-Running microservices inside of containers means we're able to run containers locally on our laptops and run the same containers in the cloud. This greatly simplifies the construction of larger applications that consist of many moving service parts, as you're able to debug locally.
+Running microservices inside of containers means we're able to run containers locally on our laptops and run the same containers in the cloud. This greatly helps to reduce bugs which can be found during development as the environment your software runs in can be identical to how it will be run in production.
 
-Packaging your ExpressJS applications inside of a Docker container is straightforward.
+Packaging a NodeJS microservice inside of a Docker container is straightforward.  To begin with you should download and install the Docker community edition from docker.com - if you haven't already done that.
 
-Download and install the Docker community edition from docker.com 
+Here is an overview of the containerization steps:
 
-* `cd` into an existing project folder
 * Build a simple service
-* Create a Dockerfile (see example below)
-* Run: `docker build -t hello-service:0.0.1 .` Don't forget the trailing period which specifies the working directory.
+* Create a Dockerfile
+* Build a container
+* Run a container
 
 The tag for the command above specifies your service name and version. It's a good practice to prefix that entry with your username or company name. For example: `cjus/hello-service:0.0.1` If you're using Docker hub to store your containers then you'll need definitely need to prefix your container name. We'll touch on Docker hub a bit more later.
 
+Let's take a look at each of the steps above.
+
 ### Building a simple microservice
 
-To build our simple microservice we'll use a package called Hydra-express, which creates a microservice using Hydra and ExpressJS. Why not just use ExpressJS? By itself, an ExpressJS app only allows you to build a Node server and add API routes. However, that basic server isn't a complete microservice. In comparison, a Hydra-express app includes functionality to discover other Hydra apps and load balance requests between them using presence and health information. Those capabilities will become important when we consider applications running on AWS and in a Docker Swarm cluster. Building Hydra and Hydra-Express apps is covered in more detail in my earlier [RisingStack articles](https://community.risingstack.com/author/carlos/) on Hydra.
+To build our simple microservice we'll use a package called Hydra-express, which creates a microservice using Hydra and ExpressJS. Why not just ExpressJS? By itself, an ExpressJS app only allows you to build a Node server and add API routes. However, that basic server isn't really a complete microservice. Granted that point is somewhat debatable - shades of gray if you will. In comparison, a Hydra-express app includes functionality to discover other Hydra apps and load balance requests between them using presence and health information. Those capabilities will become important when we consider multiple services running and communicating with each other on AWS and in a Docker Swarm cluster. Building Hydra and Hydra-Express apps is covered in more detail in my earlier [RisingStack articles](https://community.risingstack.com/author/carlos/).
 
-This approach does however, require that you're running a local instance of Redis. In the extremely unlikely event that you're unfamiliar with Redis - checkout this [quick start page](https://www.hydramicroservice.com/docs/quick-start/step1.html).
+This approach does however, require that you're running a local instance of Redis or have access to a remote one. In the extremely unlikely event that you're unfamiliar with Redis - checkout this [quick start page](https://www.hydramicroservice.com/docs/quick-start/step1.html).
 
-To avoid manually typing the code for a basic hydra-express app we'll install [Yeoman](http://yeoman.io/learning/) and Eric Adum's excellent [hydra app generator](https://github.com/flywheelsports/generator-fwsp-hydra). A Yeoman generator asks a series of questions and then generates an app for you. You can then customize it. This is similar to running the [ExpressJS Generator](https://expressjs.com/en/starter/generator.html).
+In the interests of time, and to avoid manually typing the code for a basic hydra-express app - we'll install [Yeoman](http://yeoman.io/learning/) and Eric Adum's excellent [hydra app generator](https://github.com/flywheelsports/generator-fwsp-hydra). A Yeoman generator asks a series of questions and then generates an app for you. You can then customize it to suit your needs. This is similar to running the [ExpressJS Generator](https://expressjs.com/en/starter/generator.html).
 
 ```shell
 $ sudo npm install -g yo generator-fwsp-hydra
@@ -102,11 +104,43 @@ hello-service/
     └── test.js
 
 5 directories, 9 files
-``` 
+```
 
-The assute reader will notice that there's a scripts folder with a `docker.js` file.  More on that later!
+In the folder structure above the `config` directory container a `config.json` file. That file is used by Hydra-express to specify information about our microservice.
 
-After cd-ing into the folder you can can build using `npm install`, and after running `npm start` you should see:
+The config file will look something like this:
+
+```javascript
+{
+  "environment": "development",
+  "hydra": {
+    "serviceName": "hello-service",
+    "serviceIP": "",
+    "servicePort": 8080,
+    "serviceType": "",
+    "serviceDescription": "Says hello",
+    "plugins": {
+      "logger": {
+        "logRequests": true,
+        "elasticsearch": {
+          "host": "localhost",
+          "port": 9200,
+          "index": "hydra"
+        }
+      }
+    },
+    "redis": {
+      "url": "127.0.0.1",
+      "port": 6379,
+      "db": 15
+    }
+  }
+}
+```
+
+If you're using an instance of Redis which isn't running locally you can specify its location under the `hydra.redis` config branch.  You can also specify a Redis url such as `redis://:secrets@example.com:6379/15` and you can remove the `port` and `db` key values from the config.
+
+After cd-ing into the folder you can build using `npm install`, and after running `npm start` you should see:
 
 ```shell
 $ npm start
@@ -128,17 +162,17 @@ Using the IP address and Port above we can access our `v1/hello` route from a we
 
 ![](./192_168_1_151_8080_v1_hello.png)
 
-Note, I'm using the excellent [JSON Formatter](https://chrome.google.com/webstore/detail/json-formatter/bcjindcccaagfpapjjmafapmmgkkhgoa) chrome extension. Without a similar browser extension you'll just see this:
+Note, I'm using the excellent [JSON Formatter](https://chrome.google.com/webstore/detail/json-formatter/bcjindcccaagfpapjjmafapmmgkkhgoa) chrome extension to view JSON output in all of it's glory. Without a similar browser extension you'll just see this:
 
-```
-{"statusCode":200,"statusMessage":"OK","statusDescription":"Request succeeded without error","result":{"greeting":"Welcome to Hydra Express!"}}
-```
+> {"statusCode":200,"statusMessage":"OK","statusDescription":"Request succeeded without error","result":{"greeting":"Welcome to Hydra Express!"}}
+
+OK, let's dockerize this thing!
 
 ### Creating the Dockerfile
 
-If you're following along and used the hydra generator, you already have a
+In order to containerize our microservice we need to provide instructions to Docker. This is done using a text file called a `Dockerfile`.  If you're following along and used the hydra generator, you already have a way to easily create a Dockerfile. You simply type `$ npm run docker build` and the docker.js file we saw earlier will be invoked to create your Dockerfile. That's a quick way to get the job done - but if you've never created a Dockerfile following in this section will be educational.
 
-The docker build step above looks for a file called `Dockerfile` to specify the specifics of your container. The first line specifies the base image that will be used for your container. We specify the light-weight (Alpine) image containing a minimal Linux and NodeJS version 6.9.4  -  however, you can specify the larger standard Linux image just using: FROM: node:6.9.4
+Here is a sample Dockerfile:
 
 ```
 FROM node:6.9.4-alpine
@@ -151,26 +185,47 @@ RUN npm install --production
 CMD ["npm", "start"]
 ```
 
-Other important entry, EXPOSE, is the port that our Express app listens on. The remaining lines specify that the contents of the current directory should be copied to /usr/src/app inside of the container. We then instruct Docker to run the npm install command to pull package dependencies. The final line specifies that npm start will be invoked when the container is executed.
+The first line specifies the base image that will be used for your container. We specify the light-weight (Alpine) image containing a minimal Linux and NodeJS version 6.9.4  -  however, you can specify the larger standard Linux image using: FROM: node:6.9.4
+
+Other important entry, EXPOSE, is the port that our microservice listens on. The remaining lines specify that the contents of the current directory should be copied to /usr/src/app inside of the container. We then instruct Docker to run the npm install command to pull package dependencies. The final line specifies that npm start will be invoked when the container is executed. You can learn more on the [Dockerfiles documentation page](https://docs.docker.com/engine/reference/builder/).
+
+
+### Build the container
+
+With a Dockerfile on hand we're now ready to package our microservice inside of a container.
+
+```shell
+$ docker build -t hello-service:0.0.1 .
+```
+
+Note: Don't forget the trailing period which specifies the working directory.
+
+You should see a long stream of output as your project is being loaded into the container and npm install is being run to create a complete environment for your microservice.
 
 ### Running our container
 
-We use the docker run command to invoke our container and service. The `-d` command specifies that we want to run in daemon (background mode) and the `-p` command publishes our services ports. The port syntax says: "on this machine use port 8080 and map that to the containers internal port" which is also 8080. We also name the service using the  `--name` flag  -  that's useful otherwise Docker will provide a random name for our running container. The last portion shown below is the service name and version. Ideally that should match the version in your package.json file.
+We can run our container using one command:
 
 ```
 $ docker run -d -p 8080:8080 --name hello-service hello-service:0.0.1
 ```
 
+We use the `docker run` command to invoke our container and service. The `-d` command specifies that we want to run in daemon (background mode) and the `-p` command publishes our services ports. The port syntax says: "on this machine use port 8080 (first portion) and map that to the containers internal port (second portion)" which is also 8080. We also name the service using the  `--name` flag  -  that's useful otherwise docker will provide a random name for our running container. The last portion shown below is the service name and version. Ideally that should match the version in your package.json file.
+
 ### Communicating with our container
 
-At this point you should be able to open your web browser and point it to http://localhost:8080 to access your service.
+At this point you should be able to open your web browser and point it to http://localhost:8080/v1/hello to access your service - the same way we did earlier when our service was running outside of the container. Using docker commands you can start, stop, remove containers and a whole lot more. Checkout this handy [command cheat sheet](https://github.com/wsargent/docker-cheat-sheet).
 
 ### Sharing your containers
 
-Now that you've created a container you can share it with others by publishing it to a container repository such as Docker Hub. You can setup a free account  which will allow you to publish unlimited public containers, but you'll only be able to publish one private container. To maintain multiple private containers you'll need a paid subscription. However, the plans start as low as $7 per month.
+Now that you've created a container you can share it with others by publishing it to a container registry such as [Docker Hub](https://hub.docker.com/). You can setup a free account  which will allow you to publish unlimited public containers, but you'll only be able to publish one private container. As they say in the drug business: "The first one is free". To maintain multiple private containers you'll need a paid subscription. However, the plans start at a reasonably low price of $7 per month.  You can forgo this expense by creating your own [local container repository](https://docs.docker.com/registry/deploying/). However, this isn't a useful option when we need to work in the cloud.
 
 You, or others, can pull a container image from your docker hub repo using one simple command:
 
 ```
 $ docker pull cjus/hello-service:0.0.1
 ```
+
+## A look at configuration management
+
+If you think back
