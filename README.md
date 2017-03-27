@@ -364,7 +364,7 @@ For our basic tests here, you can add Redis as a docker container using:
 $ docker pull redis:3.0.7
 ```
 
-Then add add this onto the `/etc/rc.local` file:
+Then add this onto the `/etc/rc.local` file:
 
 ```
 docker rm -f redis
@@ -378,7 +378,7 @@ Once the machine restarts you should be able to access our sample microservice t
 
 ## Recap
 
-In this article, we saw how to build a simple microservice, containerize it, and use the same container on an AWS EC2 instance. Granted, there are lots of different ways of doing this. The example here is intended to be one simple approach to get you started. With small modifications, you would be able to create lots of difference services running across many machines.
+In this article, we saw how to build a simple microservice, containerize it, and use the same container on an AWS EC2 instance. Granted, there are lots of different ways of doing this. The example here is intended to be one simple approach to get you started. With small modifications, you would be able to create lots of different services running across many machines.
 
 The examples in this article and the online [docker documentation](https://docs.docker.com/) should give you the tools you need to get started with microservices in the cloud.
 
