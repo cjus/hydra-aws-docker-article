@@ -1,24 +1,24 @@
 # Deploying Node Microservices to AWS using Docker
 
-In this two-part series, we'll look at the building and deploying microservices to Amazon's AWS using Docker. In this first part, we'll focus on building a simple microservice and packaging it in a docker container. We'll also step through hosting the container on AWS. In part two, we'll build a cluster on AWS using Docker Swarm mode, where we'll consider networking implications.
+In this two-part series, we'll look at building and deploying microservices to Amazon's AWS using Docker. In this first part, we'll focus on building a simple microservice and packaging it in a docker container, we'll also step through hosting the container on AWS. In part two, we'll assemble a cluster of machines on AWS using Docker Swarm mode.
 
-Make no mistake, this is fairly involved stuff. I'm going to soften the blow in order to make this topic approachable by a wider audience. If you're a pro at docker and AWS then you can skim through this article and look forward to part two.
+Make no mistake, this is fairly involved stuff, but I'm going to soften the blow in order to make this topic approachable to a wider audience. If you're a pro at docker and AWS then you can skim through this article and look forward to part two.
 
-Because doing such a thing is plagued with lots of complexity, we're going to use a microservices library called [Hydra](https://www.npmjs.com/package/hydra)  -  which will greatly simply the effort while offering considerable scalability benefits. Even if you choose not to use Hydra, the information in this post should help you get started with AWS and Docker.
+Deploying microservices to the cloud is plagued with lots of complexity. To simply the microservice portion we're going to use an NPM library called [Hydra](https://www.npmjs.com/package/hydra)  -  which will greatly simply the effort while offering considerable scalability benefits. Even if you choose not to use Hydra, the information in this post should help you get started with AWS and Docker.
 
 A quick recap if you're wondering what this Hydra thing is. Hydra is a NodeJS package which facilitates building distributed applications such as Microservices. Hydra offers features such as service discovery, distributed messaging, message load balancing, logging, presence, and health monitoring. As you can imagine, those features would benefit any service living on cloud infrastructure.
 
 If you'd like to learn more, see two of my earlier posts here on RisingStack. The first is [Building ExpressJS-based microservices using Hydra](https://community.risingstack.com/tutorial-building-expressjs-based-microservices-using-hydra/), and the second is [Building a Microservices Example Game with Distributed Messaging](https://community.risingstack.com/building-a-microservices-example-game-with-distributed-messaging/). A microservice game? Seriously? For the record, I do reject claims that I have too much time on my hands. 😃
 
-We'll begin by recapping docker containerization  - just in case you're new to this. Feel free to skim or skip over the next section, if you're already familiar with Docker.
+We'll begin by reviewing docker containerization  - just in case you're new to this. Feel free to skim or skip over the next section, if you're already familiar with Docker.
 
 ## Containerization?
 
 Virtual Machine software has ushered in the age of software containerization where applications can be packaged as containers making them portable and easier to manage. Docker is a significant evolution of that trend.
 
-Running microservices inside of containers means we're able to run containers locally on our laptops and run the same containers in the cloud. This greatly helps to reduce bugs which can be found during development as the environment your software runs in can be identical to how it will be run in production.
+Running microservices inside of containers makes them portable across environments. This greatly helps to reduce bugs which can be found during development as the environment your software runs in locally can match what you run in production.
 
-Packaging a NodeJS microservice inside of a Docker container is straightforward.  To begin with, you should download and install the Docker community edition from docker.com - if you haven't already done that.
+Packaging a NodeJS microservice inside of a Docker container is straightforward.  To begin with, you should download and install the Docker community edition from docker.com - if you haven't already done so.
 
 Here is an overview of the containerization steps:
 
@@ -26,8 +26,6 @@ Here is an overview of the containerization steps:
 * Create a Dockerfile
 * Build a container
 * Run a container
-
-The tag for the command above specifies your service name and version. It's a good practice to prefix that entry with your username or company name. For example: `cjus/hello-service:0.0.1` If you're using Docker hub to store your containers then you'll need definitely need to prefix your container name. We'll touch on Docker hub a bit later.
 
 Let's take a look at each of the steps above.
 
@@ -102,7 +100,7 @@ hello-service/
 5 directories, 9 files
 ```
 
-In the folder structure above the `config` directory container a `config.json` file. That file is used by Hydra-express to specify information about our microservice.
+In the folder structure above the `config` directory contains a `config.json` file. That file is used by Hydra-express to specify information about our microservice.
 
 The config file will look something like this:
 
@@ -185,11 +183,11 @@ CMD ["npm", "start"]
 
 The first line specifies the base image that will be used for your container. We specify the light-weight (Alpine) image containing a minimal Linux and NodeJS version 6.9.4  -  however, you can specify the larger standard Linux image using: FROM: node:6.9.4
 
-Other important entry, EXPOSE, is the port that our microservice listens on. The remaining lines specify that the contents of the current directory should be copied to /usr/src/app inside of the container. We then instruct Docker to run the npm install command to pull package dependencies. The final line specifies that npm start will be invoked when the container is executed. You can learn more on the [Dockerfiles documentation page](https://docs.docker.com/engine/reference/builder/).
+The EXPOSE entry identifies the port that our microservice listens on. The remaining lines specify that the contents of the current directory should be copied to /usr/src/app inside of the container. We then instruct Docker to run the npm install command to pull package dependencies. The final line specifies that npm start will be invoked when the container is executed. You can learn more on the [Dockerfiles documentation page](https://docs.docker.com/engine/reference/builder/).
 
 ### Build the container
 
-There is one thing we need to do **before** we build our container. We need to update on microservice's config.json file. You may be pointing to a local instance of Redis like this:
+There is one thing we need to do **before** we build our container. We need to update our microservice's config.json file. You may be pointing to a local instance of Redis like this:
 
 ```
     "redis": {
@@ -216,10 +214,12 @@ That basically says "when looking for the location of redis, resolve the DNS ent
 With the config change and a Dockerfile on hand we're now ready to package our microservice inside of a container.
 
 ```shell
-$ docker build -t hello-service:0.0.1 .
+$ docker build -t cjus/hello-service:0.0.1 .
 ```
 
 Note: Don't forget the trailing period which specifies the working directory.
+
+The `-t` tag for the command above specifies your service name and version. It's a good practice to prefix that entry with your username or company name. For example: `cjus/hello-service:0.0.1` If you're using Docker hub to store your containers then you'll definitely need to prefix your container name. We'll touch on Docker hub a bit later.
 
 You should see a long stream of output as your project is being loaded into the container and npm install is being run to create a complete environment for your microservice.
 
@@ -231,7 +231,7 @@ We can run our container using one command:
 $ docker run -d -p 8080:8080 \
    --add-host redis:192.168.1.151 \
    --name hello-service \
-   hello-service:0.0.1
+   cjus/hello-service:0.0.1
 ```
 
 We use the `docker run` command to invoke our container and service. The `-d` command specifies that we want to run in daemon (background mode) and the `-p` command publishes our services ports. The port syntax says: "on this machine use port 8080 (first portion) and map that to the containers internal port (second portion)" which is also 8080. The `--add-host` allows us to specify a DNS entry called `redis` to pass to our container - how cool is that? We also name the service using the  `--name` flag  -  that's useful otherwise docker will provide a random name for our running container. The last portion shown is the service name and version. Ideally, that should match the version in your package.json file.
@@ -244,7 +244,13 @@ At this point you should be able to open your web browser and point it to `http:
 
 Now that you've created a container you can share it with others by publishing it to a container registry such as [Docker Hub](https://hub.docker.com/). You can setup a free account  which will allow you to publish unlimited public containers, but you'll only be able to publish one private container. As they say in the drug business: "The first one is free". To maintain multiple private containers you'll need a paid subscription. However, the plans start at a reasonably low price of $7 per month.  You can forgo this expense by creating your own [local container repository](https://docs.docker.com/registry/deploying/). However, this isn't a useful option when we need to work in the cloud.
 
-You, or others, can pull a container image from your docker hub repo using one simple command:
+I have an account on docker hub under the username `cjus`. So to push the hello-service container to my docker account I simply use:
+
+```shell
+$ docker push cjus/hello-service:0.0.1
+```
+
+To pull (download) a container image from my docker hub repo I use this command:
 
 ```shell
 $ docker pull cjus/hello-service:0.0.1
@@ -267,7 +273,7 @@ $ docker run -d -p 8080:8080 \
    --add-host redis:192.168.1.151 \
    -v ~/configs/hello-service:/usr/src/app/config \
    --name hello-service \
-   hello-service:0.0.1
+   cjus/hello-service:0.0.1
 ```
 
 The example above has a `-v` flag which specifies a data "volume". The mapping consists of two directories separated by a colon character. 
@@ -336,12 +342,21 @@ docker rm -f hello-service
 docker run -d -p 8080:8080 \
    --restart always \
    --add-host redis:54.202.205.22 \
-   -v ~/configs/hello-service:/usr/src/app/config \
+   -v /usr/local/etc/configs/hello-service:/usr/src/app/config \
    --name hello-service \
-   hello-service:0.0.1
+   cjus/hello-service:0.0.1
 ```
 
-Look closely at the entries above, you'll notice that I specified a redis location as 54.202.205.22. That's a separate instance from our new EC2 instance.  In my example, I've created another EC2 instance to host a redis docker container. You also have the option of running a docker container on the current machine or on another in the same Amazon VPC.  While that works, the recommended solution for production use is to point to an Amazon ElasticCache running a Redis cluster or a service such as RedisLabs.
+Note: make sure to use your own docker hub user name in the last line above.
+
+Our `-v` volume flag above specifies the location of the hello-service config file. You'll need to create that folder and copy a config file into it. That will give you the ability to tweak or extend the settings.
+
+```shell
+$ sudo mkdir -p /usr/local/etc/configs/hello-service
+$ cd /usr/local/etc/configs/hello-service
+```
+
+Referring back to our `docker run` command above, you'll also notice that I specified a redis location as 54.202.205.22. That's a separate instance from our new EC2 instance.  In my example, I've created another EC2 instance to host a redis docker container. You also have the option of running a docker container on the current machine or on another in the same Amazon VPC.  While that works, the recommended solution for production use is to point to an Amazon ElasticCache running a Redis cluster or a service such as RedisLabs.
 
 For our basic tests here, you can add Redis as a docker container using:
 
@@ -356,15 +371,17 @@ docker rm -f redis
 docker run -d -p 6379:6379 --restart always -v /data:/data --name redis redis:3.0.7
 ```
 
+Notice that we're using `-v /data:/data` above.  That will allow Redis to persist its data. You'll need to actually create the `/data` folder using: `sudo mkdir /data`.
+
 After making the changes above you can restart your EC2 instance(s) with `sudo reboot`.
-Once the machine restarts you should be able to access our microservice through the hosted container.
+Once the machine restarts you should be able to access our sample microservice through the hosted container.
 
 ## Recap
 
-In this article, we saw how to build a simple microservice, containerize it, and use the same container on an AWS EC2 instance. With small modifications, you would be able to create lots of difference services running across many machines.
+In this article, we saw how to build a simple microservice, containerize it, and use the same container on an AWS EC2 instance. Granted, there are lots of different ways of doing this. The example here is intended to be one simple approach to get you started. With small modifications, you would be able to create lots of difference services running across many machines.
 
 The examples in this article and the online [docker documentation](https://docs.docker.com/) should give you the tools you need to get started with microservices in the cloud.
 
-In the second part of this series, we'll look at a much more advanced approach using a cluster of machines and Docker Swarm mode.  Stay tuned!
+In the second part of this series, we'll look at a more advanced approach using a cluster of machines and Docker Swarm mode.  Stay tuned!
 
 
