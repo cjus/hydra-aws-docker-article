@@ -14,7 +14,7 @@ We'll begin by reviewing docker containerization  - just in case you're new to
 
 ## Containerization?
 
-Virtual Machine software has ushered in the age of software containerization where applications can be packaged as containers making them portable and easier to manage. Docker is a significant evolution of that trend.
+Virtual Machine software has ushered in the age of software containerization where applications can be packaged as containers making them easier to manage. Docker is a significant evolution of that trend.
 
 Running microservices inside of containers makes them portable across environments. This greatly helps to reduce bugs which can be found during development as the environment your software runs in locally can match what you run in production.
 
@@ -27,7 +27,7 @@ Here is an overview of the containerization steps:
 * Build a container
 * Run a container
 
-Let's take a look at each of the steps above.
+Let's take a look at each of these steps.
 
 ### Building a simple microservice
 
@@ -132,7 +132,7 @@ The config file will look something like this:
 }
 ```
 
-If you're using an instance of Redis which isn't running locally you can specify its location under the `hydra.redis` config branch.  You can also specify a Redis url such as `redis://:secrets@example.com:6379/15` and you can remove the `port` and `db` key values from the config.
+If you're using an instance of Redis which isn't running locally you can specify its location under the `hydra.redis` config branch.  You can also optionally specify a Redis url such as `redis://:secrets@example.com:6379/15` and you can remove the `port` and `db` key values from the config.
 
 After cd-ing into the folder you can build using `npm install`, and after running `npm start` you should see:
 
@@ -158,7 +158,7 @@ Using the IP address and Port above we can access our `v1/hello` route from a we
 
 ![](./192_168_1_151_8080_v1_hello.png)
 
-Note, I'm using the excellent [JSON Formatter](https://chrome.google.com/webstore/detail/json-formatter/bcjindcccaagfpapjjmafapmmgkkhgoa) chrome extension to view JSON output in all of it's glory. Without a similar browser extension you'll just see this:
+Note, I'm using the excellent [JSON Formatter](https://chrome.google.com/webstore/detail/json-formatter/bcjindcccaagfpapjjmafapmmgkkhgoa) chrome extension to view JSON output in all of its glory. Without a similar browser extension you'll just see this:
 
 > {"statusCode":200,"statusMessage":"OK","statusDescription":"Request succeeded without error","result":{"greeting":"Welcome to Hydra Express!"}}
 
@@ -166,7 +166,7 @@ OK, let's dockerize this thing!
 
 ### Creating the Dockerfile
 
-In order to containerize our microservice, we need to provide instructions to Docker. This is done using a text file called a `Dockerfile`.  If you're following along and used the hydra generator, you already have a way to easily create a Dockerfile. You simply type `$ npm run docker build` and the docker.js file we saw earlier will be invoked to create your Dockerfile. That's a quick way to get the job done - but if you've never created a Dockerfile following in this section will be educational.
+In order to containerize our microservice, we need to provide instructions to Docker. This is done using a text file called a `Dockerfile`.  If you're following along and used the hydra generator, you already have an way to easily create a Dockerfile. You simply type `$ npm run docker build` and the docker.js file we saw earlier will be invoked to create your Dockerfile and build your container. That's a quick way to get the job done - but if you've never created a Dockerfile following in this section will be educational.
 
 Here is a sample Dockerfile:
 
@@ -209,7 +209,7 @@ There are lots of ways of dealing with this, but one way is simply to change the
     }
 ```
 
-That basically says "when looking for the location of redis, resolve the DNS entry named redis to an IP address". We'll see how this works shortly.
+That basically says "when looking for the location of Redis, resolve the DNS entry named redis to an IP address". We'll see how this works shortly.
 
 With the config change and a Dockerfile on hand we're now ready to package our microservice inside of a container.
 
@@ -221,7 +221,7 @@ Note: Don't forget the trailing period which specifies the working directory.
 
 The `-t` tag for the command above specifies your service name and version. It's a good practice to prefix that entry with your username or company name. For example: `cjus/hello-service:0.0.1` If you're using Docker hub to store your containers then you'll definitely need to prefix your container name. We'll touch on Docker hub a bit later.
 
-You should see a long stream of output as your project is being loaded into the container and npm install is being run to create a complete environment for your microservice.
+You should see a long stream of output as your project is being loaded into the container and `npm install` is being run to create a complete environment for your microservice.
 
 ### Running our container
 
@@ -234,7 +234,7 @@ $ docker run -d -p 8080:8080 \
    cjus/hello-service:0.0.1
 ```
 
-We use the `docker run` command to invoke our container and service. The `-d` command specifies that we want to run in daemon (background mode) and the `-p` command publishes our services ports. The port syntax says: "on this machine use port 8080 (first portion) and map that to the containers internal port (second portion)" which is also 8080. The `--add-host` allows us to specify a DNS entry called `redis` to pass to our container - how cool is that? We also name the service using the  `--name` flag  -  that's useful otherwise docker will provide a random name for our running container. The last portion shown is the service name and version. Ideally, that should match the version in your package.json file.
+We use the `docker run` command to invoke our container and service. The `-d` flag specifies that we want to run in daemon (background mode) and the `-p` flag publishes our services ports. The port syntax says: "on this machine use port 8080 (first portion) and map that to the containers internal port (second portion)" which is also 8080. The `--add-host` allows us to specify a DNS entry called `redis` to pass to our container - how cool is that? We also name the service using the  `--name` flag  -  that's useful otherwise docker will provide a random name for our running container. The last portion shown is the service name and version. Ideally, that should match the version in your package.json file.
 
 ### Communicating with our container
 
@@ -266,7 +266,7 @@ ADD . /usr/src/app
 
 So that included our `./config` folder.  Packaging a config file inside of the container isn't the most flexible thing to do - after all, we might need a different config file for each environment our service runs in.
 
-Fortunately, there an easy way to specify an external config file.
+Fortunately, there is an easy way to specify an external config file.
 
 ```shell
 $ docker run -d -p 8080:8080 \
@@ -282,7 +282,7 @@ So: `source-path`:`container-path`
 
 The volume points to a folder called `configs` in my home directory. Inside that folder I have a config.json file. That folder is then mapped to the `/usr/src/app/config` folder inside of the docker container.
 
-When the command above is issued the result will be that the container's `/usr/src/app/config` will effectively be mapped to my `~/configs` folder. Our microservice still thinks it's loading the config from its local directory and doesn't know that we've mapped that folder to our container host.
+When the command above is issued the result will be that the container's `/usr/src/app/config` will effectively be mapped to my `~/configs` folder. Our microservice still thinks it's loading the config from its local directory and doesn't know that we've mapped that folder to our host machine.
 
 We'll look at a much cleaner way of managing config files when we deploy our containers to a docker swarm in part two of this series.  For now, we'll just roll with this.
 
@@ -294,7 +294,7 @@ We'll begin by signing into AWS and navigating to the `EC2 Dashboard`. Once ther
 
 ![](./AWS-choose-ami.png)
 
-Search for `ECS Optimized` to locate the Amazon ECS-Optimized AMI. Amazon created this image for use with its [EC2 Container Service](https://aws.amazon.com/ecs/). We won't be using ECS and will opt instead to use Docker. This choice will allow you to use the skills you acquire here on other cloud providers such as Google Cloud and Microsoft's Azure. The reason we're using an ECS Optimized AMI is because it has Docker pre-installed!  In part two of this series,  we'll use Docker tools to launch AWS EC2 instances and install the docker engine onto them.   However, let's not get ahead of ourselves.
+Search for `ECS Optimized` to locate the Amazon ECS-Optimized AMI. Amazon created this image for use with its [EC2 Container Service](https://aws.amazon.com/ecs/). We won't be using ECS and will opt instead to use Docker and later, Docker Swarm. This choice will allow you to use the skills you acquire here on other cloud providers such as Google Cloud and Microsoft's Azure. The reason we're using an ECS Optimized AMI is because it has Docker pre-installed!  In part two of this series,  we'll use Docker tools to launch AWS EC2 instances and install the docker engine onto them.   However, let's not get ahead of ourselves.
 
 For now, select Amazon ECS-Optimized AMI and create an EC2 t2.micro instance.  Go ahead and configure it using defaults and a security group which opens port 8080.
 
@@ -323,7 +323,7 @@ You can check the version of docker that's running using:
 Docker version 1.12.6, build 7392c3b/1.12.6
 ```
 
-To ensure that you can pull (download) your private docker containers you'll need to sign into docker hub using:
+To ensure that you can pull (download) your private docker containers, you'll need to sign into docker hub using:
 
 ```
 $ docker login
@@ -337,7 +337,7 @@ $ docker pull cjus/hello-service:0.0.1
 
 Note: replace `cjus` above with your docker user name.
 
-Now we're ready to run it. But we don't just want to execute it on the command line as we did earlier because we need to make sure that our container runs should our EC2 instance reboot.  To do that we'll add an entry into the machine's `/etc/rc.local` file.
+Now we're ready to run it. But we don't just want to execute it on the command line as we did earlier because we need to make sure that our container runs should our EC2 instance reboot.  To do that we'll add an two entries to the machine's `/etc/rc.local` file.
 
 ```shell
 $ sudo vi /etc/rc.local
@@ -357,14 +357,14 @@ docker run -d -p 8080:8080 \
 
 Note: make sure to use your own docker hub user name in the last line above.
 
-Our `-v` volume flag above specifies the location of the hello-service config file. You'll need to create that folder and copy a config file into it. That will give you the ability to tweak or extend the settings.
+Our `-v` volume flag above specifies the location of the hello-service config file. You'll need to create that folder and copy a config file into it. That will give you the ability to laster tweak or extend the settings.
 
 ```shell
 $ sudo mkdir -p /usr/local/etc/configs/hello-service
 $ cd /usr/local/etc/configs/hello-service
 ```
 
-Referring back to our `docker run` command above, you'll also notice that I specified a redis location as 54.202.205.22. That's a separate instance from our new EC2 instance.  In my example, I've created another EC2 instance to host a redis docker container. You also have the option of running a docker container on the current machine or on another in the same Amazon VPC.  While that works, the recommended solution for production use is to point to an Amazon ElasticCache running a Redis cluster or a service such as RedisLabs.
+Referring back to our `docker run` command above, you'll also notice that I specified a Redis location as 54.202.205.22. That's a separate instance from our new EC2 instance.  In my example, I've created another EC2 instance to host a Redis docker container. You also have the option of running a docker container on the current machine or on another in the same Amazon VPC.  While that works, the recommended solution for production use is to point to an Amazon ElasticCache running a Redis cluster or a service such as RedisLabs.
 
 For our basic tests here, you can add Redis as a docker container using:
 
@@ -386,7 +386,7 @@ Once the machine restarts you should be able to access our sample microservice t
 
 ## Recap
 
-In this article, we saw how to build a simple microservice, containerize it, and use the same container on an AWS EC2 instance. Granted, there are lots of different ways of doing this. The example here is intended to be one simple approach to get you started. With small modifications, you would be able to create lots of different services running across many machines.
+In this article, we saw how to build a simple microservice, containerize it, and use the same container on an AWS EC2 instance. Granted, there are lots of different ways of doing this. The example here is intended to be just one simple approach to get you started. With small modifications, you would be able to create lots of different services running across many machines.
 
 The examples in this article and the online [docker documentation](https://docs.docker.com/) should give you the tools you need to get started with microservices in the cloud.
 
