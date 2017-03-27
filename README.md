@@ -45,10 +45,11 @@ Next, we'll invoke Yeoman and the hydra generator.  Name your microservice `hell
 
 ```shell
 $ yo fwsp-hydra
-fwsp-hydra generator v0.2.10   yeoman-generator v1.1.1   yo v1.8.5
+fwsp-hydra generator v0.3.1   yeoman-generator v1.1.1   yo v1.8.5
 ? Name of the service (`-service` will be appended automatically) hello
 ? Your full name? Carlos Justiniano
-? Your email address? cjus34@gmail.com
+? Your email address? carlos.justiniano@gmail.com
+? Your organization or username? (used to tag docker images) cjus
 ? Host the service runs on?
 ? Port the service runs on? 8080
 ? What does this service do? Says hello
