@@ -284,3 +284,87 @@ We'll look at a much cleaner way of managing config files when we deploy our con
 
 I have to assume here that you're familiar with using AWS and in particular creating EC2 instances and later ssh-ing into them.  And that you're comfortable creating security groups and opening ports. If not, you can still follow along to get a sense of what's involved.
 
+We'll begin by signing into AWS and navigating to the `EC2 Dashboard`. Once there click on the "Launch Instance" button. On the page that loads select the AWS Marketplace tab. You should see a screen like this:
+
+![](./AWS-choose-ami.png)
+
+Search for `ECS Optimized` to locate the Amazon ECS-Optimized AMI. Amazon created this image for use with its [EC2 Container Service](https://aws.amazon.com/ecs/). We won't be using ECS and will opt instead to use Docker. This choice will allow you to use the skills you acquire here on other cloud providers such as Google Cloud and Microsoft's Azure. The reason we're using an ECS Optimized AMI is because it has Docker pre-installed!  In part two of this series,  we'll use Docker tools to launch AWS EC2 instances and install the docker engine onto them.   However, let's not get ahead of ourselves.
+
+For now, select Amazon ECS-Optimized AMI and create an EC2 t2.micro instance.  Go ahead and configure it using defaults and a security group which opens port 8080.
+
+Once the EC2 instance is ready you can SSH into it to install our docker container.
+
+```shell
+$ ssh 54.186.15.21
+Warning: Permanently added 'ec2-54-186-15-21.us-west-2.compute.amazonaws.com,54.186.15.21' (ECDSA) to the list of known hosts.
+Last login: Sat Mar 25 21:47:19 2017 from pool-xx-xxx-xxx-xxx.nwrknj.fios.verizon.net
+
+   __|  __|  __|
+   _|  (   \__ \   Amazon ECS-Optimized Amazon Linux AMI 2016.09.g
+ ____|\___|____/
+
+For documentation visit, http://aws.amazon.com/documentation/ecs
+2 package(s) needed for security, out of 9 available
+Run "sudo yum update" to apply all updates.
+```
+
+You should run the security updates while you're there.
+
+You can check the version of docker that's running using:
+
+```shell
+[ec2-user@ip-172-31-6-97 ~]$ docker --version
+Docker version 1.12.6, build 7392c3b/1.12.6
+```
+
+To install our microservice we just need to pull it from docker hub.
+
+```shell
+$ docker pull cjus/hello-service:0.0.1
+```
+
+Now we're ready to run it. But we don't just want to execute it on the command line as we did earlier because we need to make sure that our container runs should our EC2 instance reboot.  To do that we'll add an entry into the machine's `/etc/rc.local` file.
+
+```shell
+$ sudo vi /etc/rc.local
+```
+
+And add the following entries:
+
+```
+docker rm -f hello-service
+docker run -d -p 8080:8080 \
+   --restart always \
+   --add-host redis:54.202.205.22 \
+   -v ~/configs/hello-service:/usr/src/app/config \
+   --name hello-service \
+   hello-service:0.0.1
+```
+
+Look closely at the entries above, you'll notice that I specified a redis location as 54.202.205.22. That's a separate instance from our new EC2 instance.  In my example, I've created another EC2 instance to host a redis docker container. You also have the option of running a docker container on the current machine or on another in the same Amazon VPC.  While that works, the recommended solution for production use is to point to an Amazon ElasticCache running a Redis cluster or a service such as RedisLabs.
+
+For our basic tests here, you can add Redis as a docker container using:
+
+```shell
+$ docker pull redis:3.0.7
+```
+
+Then add add this onto the `/etc/rc.local` file:
+
+```
+docker rm -f redis
+docker run -d -p 6379:6379 --restart always -v /data:/data --name redis redis:3.0.7
+```
+
+After making the changes above you can restart your EC2 instance(s) with `sudo reboot`.
+Once the machine restarts you should be able to access our microservice through the hosted container.
+
+## Recap
+
+In this article, we saw how to build a simple microservice, containerize it, and use the same container on an AWS EC2 instance. With small modifications, you would be able to create lots of difference services running across many machines.
+
+The examples in this article and the online [docker documentation](https://docs.docker.com/) should give you the tools you need to get started with microservices in the cloud.
+
+In the second part of this series, we'll look at a much more advanced approach using a cluster of machines and Docker Swarm mode.  Stay tuned!
+
+
