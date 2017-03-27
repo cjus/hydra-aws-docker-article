@@ -357,7 +357,7 @@ docker run -d -p 8080:8080 \
 
 Note: make sure to use your own docker hub user name in the last line above.
 
-Our `-v` volume flag above specifies the location of the hello-service config file. You'll need to create that folder and copy a config file into it. That will give you the ability to laster tweak or extend the settings.
+Our `-v` volume flag above specifies the location of the hello-service config file. You'll need to create that folder and copy a config file into it. That will give you the ability to later tweak or extend the settings.
 
 ```shell
 $ sudo mkdir -p /usr/local/etc/configs/hello-service
