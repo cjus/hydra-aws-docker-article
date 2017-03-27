@@ -323,11 +323,19 @@ You can check the version of docker that's running using:
 Docker version 1.12.6, build 7392c3b/1.12.6
 ```
 
+To ensure that you can pull (download) your private docker containers you'll need to sign into docker hub using:
+
+```
+$ docker login
+```
+
 To install our microservice we just need to pull it from docker hub.
 
 ```shell
 $ docker pull cjus/hello-service:0.0.1
 ```
+
+Note: replace `cjus` above with your docker user name.
 
 Now we're ready to run it. But we don't just want to execute it on the command line as we did earlier because we need to make sure that our container runs should our EC2 instance reboot.  To do that we'll add an entry into the machine's `/etc/rc.local` file.
 
