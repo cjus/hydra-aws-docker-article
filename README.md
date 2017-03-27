@@ -301,8 +301,8 @@ For now, select Amazon ECS-Optimized AMI and create an EC2 t2.micro instance.  G
 Once the EC2 instance is ready you can SSH into it to install our docker container.
 
 ```shell
-$ ssh 54.186.15.21
-Warning: Permanently added 'ec2-54-186-15-21.us-west-2.compute.amazonaws.com,54.186.15.21' (ECDSA) to the list of known hosts.
+$ ssh 54.186.15.17
+Warning: Permanently added 'ec2-54-186-15-17.us-west-2.compute.amazonaws.com,54.186.15.17' (ECDSA) to the list of known hosts.
 Last login: Sat Mar 25 21:47:19 2017 from pool-xx-xxx-xxx-xxx.nwrknj.fios.verizon.net
 
    __|  __|  __|
