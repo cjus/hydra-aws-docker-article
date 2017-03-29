@@ -1,6 +1,6 @@
 # Deploying Node Microservices to AWS using Docker (part two)
 
-In part one of this series we look at creating a simple microservice and packaging a microservice in a Docker container. We also looked at deploying the container to AWS using Amazon's ECS optimized Linux AMI - which has the Docker engine pre-installed.
+In part one of this series we look at creating a simple microservice and packaging it into a Docker container. We also looked at deploying the container to AWS using Amazon's ECS optimized Linux AMI - which has the Docker engine pre-installed.
 
 In this post we'll create a Docker Swarm cluster almost entirely from the command line! In the process we'll deploy multiple services and introduce application and message-based load balancing.
 
