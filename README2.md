@@ -33,7 +33,7 @@ In preparation for this, we'll first create a new [IAM role](http://docs.aws.ama
 
 Make sure to grab the Access Key and Secret Key as you'll need those shortly.
 
-To assist with the creation and configuration of EC2 instances we'll create a shell script called `create_node` which uses the [docker-machine](https://docs.docker.com/machine/overview/) command to create an EC2 instance and install the docker engine.
+To assist with the creation and configuration of EC2 instances we'll create a shell script called `create-node` which uses the [docker-machine](https://docs.docker.com/machine/overview/) command to create an EC2 instance and install the docker engine.
 
 ```shell
 #!/bin/bash
@@ -65,7 +65,7 @@ The above script also allows you to specify the type of EC2 instance to use. The
 Using the script is as easy as:
 
 ```shell
-$ ./create_node node01 t2.micro
+$ ./create-node node01 t2.micro
 ```
 
 As a complement to the above script, we'll also create a `remove_node` script.
@@ -137,10 +137,10 @@ Because our sample microservices are build using Hydra, we'll need an available 
 
 The first and production friendly method is to use a hosted Redis cluster, such as Amazon's ElasticCache for Redis or the RedisLabs service. For our example here the easiest approach will be to head over to RedisLabs and setup a free trial instance. The process takes just a few minutes and you'll end up with a Redis connection string that you can use with your test cluster.
 
-The second method will be to use our `create_node` script to create an new EC2 instance in your VPC environment.  Doing this is also surprising easy - but more work than just using RedisLabs.
+The second method will be to use our `create-node` script to create an new EC2 instance in your VPC environment.  Doing this is also surprising easy - but more work than just using RedisLabs.
 
 ```shell
-$ ./create_node redis
+$ ./create-node redis
 ```
 
 We can then ssh into the machine using:
@@ -149,27 +149,72 @@ We can then ssh into the machine using:
 $ docker-machine ssh redis
 ```
 
+Once inside, check to see what user you are:
+
+```shell
+$ whoami
+ubuntu
+```
+
+Then grant that add that user to the docker group:
+
+```shell
+$ sudo usermod -a -G docker ubuntu
+```
+
 Then install Redis:
 
 ```shell
-$ docker pull redis:3.0.7
+$ sudo docker pull redis:3.0.7
 $ sudo mkdir /data
 ```
 
-Add this to /etc/rc.local
+In order to ensure that Redis restarts on reboots we'll need to make sure the container starts as a system service.
+
+```shell
+$ cd /etc/systemd/system/
+$ sudo vi redis.service
+```
+
+In your new `redis.service` file add the following lines: 
 
 ```
-docker rm -f redis
-docker run -d -p 6379:6379 --restart always -v /data:/data --name redis redis:3.0.7
+[Unit]
+Description=Redis container
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+TimeoutStartSec=0
+ExecStart=/usr/bin/docker run -d -p 6379:6379 --restart always -v /data:/data --name redis redis:3.0.7
+ExecStop=/usr/bin/docker stop -t 2 redis
+ExecStopPost=/usr/bin/docker rm -f redis
+
+[Install]
+WantedBy=default.target
 ```
 
-Then:
+Save that file and tell systemd that you'd like to start and enable the new redis service on boot. 
 
+```shell
+$ sudo systemctl daemon-reload
+$ sudo systemctl start redis.service
+$ sudo systemctl enable redis.service
+Created symlink from /etc/systemd/system/default.target.wants/redis.service to /etc/systemd/system/redis.service.
 ```
+
+You can then reboot the box to lunch it with the Redis container.
+
+```shell
 $ sudo reboot
 ```
 
-Using the above method you can also add other resources such as databases. The resources won't live in our Docker cluster, but will be accessible within the same VPC. Again, this is a great way to test our cluster, but not recommended for production use.
+Now, I know what you're thinking! - I should have just used RedisLabs. But seriously, it's not too bad. Besides, using the above method you'll be able to add other resources such as databases. The resources won't live in our Docker cluster, but will be accessible within the same VPC. Again, this is a great way to test our cluster, but not recommended for production use.
+
+
+### Testing our Redis setup
+
 
 ## Creating and configuring the swarm
 
@@ -373,7 +418,6 @@ $ docker service create \
     --name hello-service \
     --network servicenet \
     --update-delay 10s \
-    --with-registry-auth \
     --constraint=node.role==worker \
     --env HYDRA_REDIS_URL="redis://10.0.0.154:6379/15" \
     --env HYDRA_SERVICE="hello-service:0.0.2" \
@@ -383,9 +427,30 @@ $ docker service create \
 
 > Creating a service which does not use `--publish` places the service in the `servicenet`, our private subnet. The service can still listen on a port for inter-service communication.
 
-> In the example above we first login to docker(hub) and specify the `--with-registry-auth` flag with the service create operation. This is necessary in order to be able to pull private containers.  Although the `cjus/hello-service:0.0.5` is a public container the flags are specified here as an example of how to work with a private docker repo.
+#### Working with private containers
 
-If you'd like to play around with this, both the flywheelsports/hydra-router and cjus/hello-service containers can be pulled from Docker Hub.
+It's likely, that at some point, you'll need to use private containers for one or more of your services. To do this you first sign into a master node and then issue a `docker login` command. 
+
+```shell
+$ docker login
+```
+
+Then issue the docker service command with the `--with-registry-auth` flag. This tells docker to use the credential we provided during the login.
+
+Here's the full command: 
+
+```shell
+$ docker service create \
+    --name hello-service \
+    --network servicenet \
+    --update-delay 10s \
+    --with-registry-auth \
+    --constraint=node.role==worker \
+    --env HYDRA_REDIS_URL="redis://10.0.0.154:6379/15" \
+    --env HYDRA_SERVICE="my-private-service:0.0.8" \
+    --replicas=5 \
+    cjus/my-private-service:0.0.8
+```
 
 ### Removing services
 
@@ -414,7 +479,7 @@ You can update a running service to a new docker container using:
 
 ```
 $ docker service update \
-    --image flywheelsports/fwsp-hydra-router:0.15.9 \
+    --image flywheelsports/hydra-router:1.0.9 \
     hydra-router
 ```
 
