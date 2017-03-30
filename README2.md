@@ -1,6 +1,6 @@
 # Deploying Node Microservices to AWS using Docker (part two)
 
-In part one of this series we look at creating a simple microservice and packaging it into a Docker container. We also looked at deploying the container to AWS using Amazon's ECS optimized Linux AMI - which has the Docker engine pre-installed.
+In [part one](https://community.risingstack.com/deploying-node-js-microservices-to-aws-using-docker/) of this series we looked at creating a simple microservice and packaging it into a Docker container. We also looked at deploying the container to AWS using Amazon's ECS optimized Linux AMI - which has the Docker engine pre-installed.
 
 In this post we'll create a Docker Swarm cluster almost entirely from the command line! In the process we'll deploy multiple services and introduce application and message-based load balancing.
 
@@ -10,12 +10,435 @@ In any case the approach we'll look at here can be further scaled in complexity 
 
 Let's get started.
 
+## We'll begin with the end in mind
+
+We're going to build an eight-node cluster accessible via an Amazon Application Load Balancer (ALB). Our cluster will accept HTTP traffic and load balance between three master nodes which host our service-aware Application API Gateway, [hydra-router](https://github.com/flywheelsports/hydra-router). Hydra-router, itself a microservice, will be the only service listening on port 80.  It's responsible for routing service calls to individual services within the cluster.
+
+Hydra-router will only run on master nodes 01 - 03, which are directly accessible via the ALB.  Our microservices will run on worker nodes 01-05.  Services running on worker nodes will not publish ports for use outside of the network that the container is running in.
+
+<img src="./swarm-roles.png" alt="swarm roles" width="600px" />
+
+Referring to the above diagram, the master nodes in the Ingress network communicate with one another in support of high availability. If one master node dies another is elected the active master. We can also scale up or down as required.  Each Hydra-router running inside of a master node is able to communicate with microservices running in containers on the `service network`. Additionally, each service is able to communicate with the outside world (external API services) and with its internal peers and hydra-routers.
+
+Using Docker swarm mode, we'll be able to scale our services with a simple command. We'll also be able to add and remove EC2 instances participating in a swarm and redistribute our services accordingly.
+
+### AWS setup
+
+We're going to use Amazon Web Services cloud.  Just as in the first part of this series, I have to assume that you're somewhat familiar with AWS. You should be comfortable creating EC2 instances and connecting to them using SSH. 
+
+Our initial goal with AWS is to be able to create machines from the commandline.
+In preparation for this, we'll first create a new [IAM role](http://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) for a programmatic user with `AmazonEC2FullAccess` credentials.
+
+> <img src="./IAM_Management_Console.png" alt="swarm roles" width="600px" />
+
+Make sure to grab the Access Key and Secret Key as you'll need those shortly.
+
+To assist with the creation and configuration of EC2 instances we'll create a shell script called `create_node` which uses the [docker-machine](https://docs.docker.com/machine/overview/) command to create an EC2 instance and install the docker engine.
+
+```shell
+#!/bin/bash
+
+AWS_AK="FAKE-AKIAISQOOR3SGN3RPCBT"
+AWS_SK="FAKE-CfZ77GEyomrp7+VmRCX+yq+D6uJoKv8lufbEH8Jl"
+AWS_VPC='vpc-{here}'
+AWS_REGION='us-east-1'
+
+NODE_NAME=$1
+MTYPE=$2
+MACHINE_TYPE=${MTYPE:='t2.small'}
+
+docker-machine create --driver amazonec2 \
+    --amazonec2-access-key $AWS_AK \
+    --amazonec2-secret-key $AWS_SK \
+    --amazonec2-vpc-id "${AWS_VPC}" \
+    --amazonec2-region "${AWS_REGION}" \
+    --amazonec2-instance-type "${MACHINE_TYPE}" \
+    ${NODE_NAME}
+
+echo "${NODE_NAME} should be available in a minute"
+```
+
+In this script, we've defined the AWS Access token key `AWS_AK` and the Secret token key `AWS_SK`. Additionally, we define the AWS VPC id `AWS_VPC` and the AWS Region `AWS_REGION`.  These tokens can be defined and exported outside of the script as a good practice using environment variables. The keys are embedded in this example for clarity.
+
+The above script also allows you to specify the type of EC2 instance to use. The default is `t2.small` but could be `t2.micro` or larger depending on your needs.
+
+Using the script is as easy as:
+
+```shell
+$ ./create_node node01 t2.micro
+```
+
+As a complement to the above script, we'll also create a `remove_node` script.
+
+```shell
+#!/bin/bash
+docker-machine rm -f $1
+```
+
+So we can remove EC2 instances created using `create-node`:
+
+```shell
+$ ./remove_node node01
+```
+
+If you haven't created EC2 instances in this way then those two scripts should cover the costs of this article!  Read on, there's a whole lot more coolness to come.
+
+### Creating EC2 Nodes
+
+As a recap here is the breakdown of the EC2 instances we'll create.
+
+<img src="./swarm.png" alt="swarm" width="500px" />
+
+Using our `create-node` script we're able to automate the creation and configuration of our EC2 instances.
+
+```shell
+# create master nodes
+#
+for i in 1 2 3
+do
+  ./create-node master0$i t2.small
+done
+
+# create worker nodes
+#
+for i in 1 2 3 4 5
+do
+  ./create-node worker0$i t2.small
+done
+```
+> 🍺 **PubTip**: Consider running each section above in different terminal shells. At this stage, the master and worker nodes do not depend on one another and can be created in parallel.
+
+Once the above commands complete we can view a list of created machines.
+
+```shell
+$ docker-machine ls -t "30"
+```
+
+### AWS security group setup
+
+After creating your first EC2 node above you should see a `docker-machine` security group in the VPC you specified. It's a basic setup suitable for simple uses, but we'll need to update it for use with our swarm.
+
+Here's a summary of the changes we need to make:
+
+  * SSH port 22
+  * TCP port 2377 for cluster management communications
+  * TCP and UDP port 7946 for communication among nodes
+  * TCP and UDP port 4789 for overlay network traffic
+
+Here is what your enhanced security group should look like on AWS:
+
+> <img src="./EC2_DockerSecurityGroup.png" alt="AWS security group" width="800px" />
+
+With these change in place, we can proceed to configure our swarm.
+
+## Redis setup
+
+Because our sample microservices are build using Hydra, we'll need an available instance of Redis.  Let's look at two ways to address this requirement.
+
+The first and production friendly method is to use a hosted Redis cluster, such as Amazon's ElasticCache for Redis or the RedisLabs service. For our example here the easiest approach will be to head over to RedisLabs and setup a free trial instance. The process takes just a few minutes and you'll end up with a Redis connection string that you can use with your test cluster.
+
+The second method will be to use our `create_node` script to create an new EC2 instance in your VPC environment.  Doing this is also surprising easy - but more work than just using RedisLabs.
+
+```shell
+$ ./create_node redis
+```
+
+We can then ssh into the machine using:
+
+```shell
+$ docker-machine ssh redis
+```
+
+Then install Redis:
+
+```shell
+$ docker pull redis:3.0.7
+$ sudo mkdir /data
+```
+
+Add this to /etc/rc.local
+
+```
+docker rm -f redis
+docker run -d -p 6379:6379 --restart always -v /data:/data --name redis redis:3.0.7
+```
+
+Then:
+
+```
+$ sudo reboot
+```
+
+Using the above method you can also add other resources such as databases. The resources won't live in our Docker cluster, but will be accessible within the same VPC. Again, this is a great way to test our cluster, but not recommended for production use.
+
+## Creating and configuring the swarm
+
+We're now ready to configure our swarm.  This process will involve creating a swarm manager and assigning workers.
+
+We begin configuring our swarm by requesting the external IP address of our the master01 node.
+
+```shell
+$ docker-machine ip master01
+35.128.252.201
+```
+
+We'll use that IP to initialize our swarm.
+
+```shell
+$ docker-machine ssh master01
+$ sudo docker swarm init --advertise-addr 35.128.252.201:2377
+Swarm initialized: current node (f15m9npvwumliqoe6wzor8tvh) is now a manager.
+
+To add a worker to this swarm, run the following command:
+
+    docker swarm join \
+    --token SWMTKN-1-2ohfpmuvx34e2o7wzag1qcohoti8layd0vk7ivoebncmw37p9y-ezvmn0oj8a2o1l25l4fyahcn6 \
+    35.128.252.201:2377
+
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
+
+$ docker swarm join-token manager
+To add a manager to this swarm, run the following command:
+
+    docker swarm join \
+    --token SWMTKN-1-3ohfpmuvx39e2o7wzqg1qdohoti8layg0vk7ivoebncmw37p9y-07zcw2jht968k1td1f8dofcha \
+    35.128.252.201:2377
+```
+
+We have two other master nodes to turn into managers.  Sadly, they won't get a pay raise.
+
+```shell
+$ docker-machine ssh master02
+$ sudo docker swarm join \
+--token SWMTKN-1-3ohfpmuvx39e2o7wzqg1qdohoti8layg0vk7ivoebncmw37p9y-07zcw2jht968k1td1f8dofcha \
+35.128.252.201:2377
+$ exit
+
+$ docker-machine ssh master03
+$ sudo docker swarm join \
+--token SWMTKN-1-3ohfpmuvx39e2o7wzqg1qdohoti8layg0vk7ivoebncmw37p9y-07zcw2jht968k1td1f8dofcha \
+35.128.252.201:2377
+$ exit
+```
+
+From any swarm manager node you can view the status of managers:
+
+```shell
+$ sudo docker node ls
+ID                           HOSTNAME  STATUS  AVAILABILITY  MANAGER STATUS
+f15m9npvwumliqoe6wzor8tvh *  master01  Ready   Active        Leader
+t77rsrfdrq9u3v4rftldyzsgj    master02  Ready   Active        Reachable
+ye7iq8hswgacvkz8il51v6je1    master03  Ready   Active        Reachable
+```
+Here we see that our master01 node is the leader, but should something happen to it - one of the other managers will be elected the new leader.  If our master01 node later recovers from its untimely accident it won't resume as the leader but it will be marked as Reachable and eligible for promotion should something happen to another master node.
+
+Now we're ready to configure our worker nodes.
+
+```shell
+for i in 1 2 3 4 5
+do
+  docker-machine ssh worker0$i sudo docker swarm join \
+  --token SWMTKN-1-2ohfpmuvx34e2o7wzag1qcohoti8layd0vk7ivoebncmw37p9y-ezvmn0oj8a2o1l25l4fyahcn6 \
+  35.128.252.201:2377
+done
+```
+
+From a manager node, we can see the status of our swarm cluster. We see that our master01 node is the leader, with two mangers reachable and waiting in the wings for their shot at the corner office.  We also see that none of our worker nodes are managers.
+
+```
+$ sudo docker node ls -t "30"
+ID                           HOSTNAME  STATUS  AVAILABILITY  MANAGER STATUS
+8caeo3nvjfa5d3jrqamciyijv    worker04  Ready   Active
+c4nc3wnr45ii53hli5yomw234    worker03  Ready   Active
+dfjrl5767thytai4lz9dfk360    worker05  Ready   Active
+f15m9npvwumliqoe6wzor8tvh *  master01  Ready   Active        Leader
+fcvzbgziv3ptso1r9egazizqv    worker01  Ready   Active
+t77rsrfdrq9u3v4rftldyzsgj    master02  Ready   Active        Reachable
+vz489z1vywrthlt4r9bw94zda    worker02  Ready   Active
+ye7iq8hswgacvkz8il51v6je1    master03  Ready   Active        Reachable
+```
+
+### Swarm networking
+
+At this stage, we have EC2 instances participating in a swarm as either managers or workers. We're not ready to create a network on which each node can communicate.  This type of network is referred to as an overlay network.
+
+```shell
+$ docker network create servicenet \
+  --driver overlay \
+  --subnet 10.0.9.0/24
+```
+
+You can list available networks with:
+
+```shell
+$ docker network ls
+NETWORK ID          NAME                DRIVER              SCOPE
+7ffba041b5b9        bridge              bridge              local
+90d25bc2e419        docker_gwbridge     bridge              local
+7af9c7ddd8f6        host                host                local
+p5f0bg197oia        ingress             overlay             swarm
+e5f86522a1d0        none                null                local
+z6vut7t9439u        servicenet          overlay             swarm
+```
+
+Notice that there are two overlay networks, `ingress` and our newly created `servicenet` - both have a scope of `swarm`.
+
+<img src="./networks.png" alt="networks" width="400px" />
+
+| network | usage | scope |
+| --- | --- | --- |
+| docker_gwbridge | A network created by Docker to allow containers to connect to their host | local |
+| ingress | Network created by Docker to externally expose services and utilize the routing mesh | swarm |
+| servicenet | Overlay network we created to enable container to container communication | swarm |
+
+### Swarm visualization service
+
+Mano Marks has created a handy [docker swarm visualizer](https://github.com/ManoMarks/docker-swarm-visualizer) that we'll install onto our master01 node.
+
+```shell
+$ docker-machine ssh master01
+$ docker service create \
+  --name=viz \
+  --publish=8080:8080/tcp \
+  --update-delay 10s \
+  --constraint=node.role==manager \
+  --mount=type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock \
+  manomarks/visualizer
+```
+
+To view it, make sure to open port 8080 on the master01 node using an AWS security group that restricts access to your IP address.
+
+<img src="./Visualizer.png" alt="AWS security group" width="900px" />
+
 ## Configuration management revisited
 
-In the first post of this series, we considered how config files can be baked into a container. We also saw how we can use docker volume mapping to allow our container to reference external config files.
+Hydra-based applications are initialized using a JavaScript object which contains the service name, description, IP and Port information and the location of the Redis server that Hydra depends on. Most often that information is loaded from a remote config.json file. In the case of a containerized hydra-based application, you have the option of overriding the packaged config.json file with one mapped to a volume using the `-v` fragment in the example below:
 
-That all works fine - up to a point. A key goal with containerization is to create truly portable containers. Containers that ideally do not depend on the configuration of the machine it's running in. Furthermore, in a machine cluster we might not know or care on which machine in a cluster our container runs in. That ideal is comprised if we need to update each cluster machine with a copy of our service's configuration files.
+```shell
+docker run -d \
+  --workdir=/usr/src/app \
+  -p 1337:1337 \
+  --restart always \
+  --add-host host:$HOST \
+  --add-host redis:$DBS \
+  --name auth-svcs \
+  -v /usr/local/etc/auth-svcs:/usr/src/app/config \
+  someco/auth-svcs:0.2.7
+```
 
-Thus, the management of our service config files can quickly become a headache.
+This can work fine in dockerized deployments which use ECS optimized EC2 images.  You simply have to ensure that the config files are present on the machine before running the dockerized containers.
 
-There are lots of ways to address configuration management, however we're going to use a feature built into Hydra.
+However, this isn't convenient for use with Docker Swarm where you don't actually know what machine your container will run on.
+
+Starting with [hydra](https://github.com/flywheelsports/hydra) 0.15.10 and [hydra-express](https://github.com/flywheelsports/hydra-express)  0.15.11 your hydra service can request its config directly from your Redis instance. Naturally, that implies that you've loaded the config into Redis in the first place.
+
+To do this you'll need [hydra-cli](https://github.com/flywheelsports/hydra-cli) version 0.5.4 or greater.
+
+```shell
+$ hydra-cli cfg push hydra-router:0.15.4 config.json
+```
+
+You're expected to provide the service name separated by a version string and a local config.json file whose contents will be uploaded.
+
+Later you can retrieve a stored file using:
+
+```shell
+$ hydra-cli cfg pull hydra-router:0.15.4 > config.json
+```
+
+This is useful when you want to make changes to an existing config file or when you'd like to upload a new config based on an older copy.
+
+## Services
+
+We can now use the Docker service create command to push containers into our swarm. In the example below we specify `--env HYDRA_REDIS` to point to the Redis server the service will use to retrieve its configuration file from.  In production, the Redis instance would likely be an Amazon Elastic Cache cluster or one at RedisLabs.
+
+```shell
+$ docker service create \
+    --name hydra-router \
+    --network servicenet \
+    --update-delay 10s \
+    --constraint=node.role==manager \
+    --env HYDRA_REDIS_URL="redis://10.0.0.154:6379/15" \
+    --env HYDRA_SERVICE="hydra-router:0.15.4" \
+    --publish 80:80 \
+    --replicas=3 \
+    flywheelsports/hydra-router:1.0.9
+```
+
+> When a service is created which uses `--publish` it is automatically added to the `ingress` network. This is because publishing a port says you want the container to be remotely accessible.
+
+```shell
+$ docker login
+$ docker service create \
+    --name hello-service \
+    --network servicenet \
+    --update-delay 10s \
+    --with-registry-auth \
+    --constraint=node.role==worker \
+    --env HYDRA_REDIS_URL="redis://10.0.0.154:6379/15" \
+    --env HYDRA_SERVICE="hello-service:0.0.2" \
+    --replicas=5 \
+    cjus/hello-service:0.0.5
+```
+
+> Creating a service which does not use `--publish` places the service in the `servicenet`, our private subnet. The service can still listen on a port for inter-service communication.
+
+> In the example above we first login to docker(hub) and specify the `--with-registry-auth` flag with the service create operation. This is necessary in order to be able to pull private containers.  Although the `cjus/hello-service:0.0.5` is a public container the flags are specified here as an example of how to work with a private docker repo.
+
+If you'd like to play around with this, both the flywheelsports/hydra-router and cjus/hello-service containers can be pulled from Docker Hub.
+
+### Removing services
+
+You can easily remove services using:
+
+```shell
+$ docker service rm hydra-router
+$ docker service rm hello-service
+```
+
+### Scaling services
+
+Scaling services is just a matter of using the Docker service scale command and specifying the service name and the number of required replicas.  This allows you to scale a service up or down.
+
+```shell
+$ docker service scale hydra-router=3
+```
+
+```shell
+$ docker service scale hydra-router=0
+```
+
+### Updating services
+
+You can update a running service to a new docker container using:
+
+```
+$ docker service update \
+    --image flywheelsports/fwsp-hydra-router:0.15.9 \
+    hydra-router
+```
+
+To view the versions of the running containers you can:
+
+```shell
+$ docker service ls
+ID            NAME            MODE        REPLICAS  IMAGE
+1fs4uji2vs3j  offers-service  replicated  1/1       flywheelsports/offers-service:0.2.1
+4r5tbyrmtvi2  hello-service   replicated  1/1       cjus/hello-service:0.0.5
+qw7w325zg9e1  hydra-router    replicated  1/1       flywheelsports/hydra-router:1.0.9
+tan1qxhlu8sj  viz             replicated  1/1       manomarks/visualizer:latest
+```
+
+## Test drive
+
+In order to try all of this out you'll need to obtain the IP address of your Amazon ALB from the AWS dashboard.
+
+
+<img src="./EC2_AEB_Console.png" alt="networks" width="700px" />
+
+You can direct traffic to the load balancer doing something like this:
+
+<img src="./hydra-alb-test_us-east-1_elb_amazonaws_com_v1_hello_test.png" alt="networks" width="700px" />
+
+Refreshing the browser page would display different service IDs as the traffic is load balanced to our five hello services.
+
