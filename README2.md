@@ -127,7 +127,7 @@ Here's a summary of the changes we need to make:
 
 Here is what your enhanced security group should look like on AWS:
 
-> <img src="./EC2_DockerSecurityGroup.png" alt="AWS security group" width="800px" />
+> <img src="./EC2_DockerSecurityGroup.png" alt="AWS security group" />
 
 With these change in place, we can proceed to configure our swarm.
 
@@ -135,86 +135,68 @@ With these change in place, we can proceed to configure our swarm.
 
 Because our sample microservices are build using Hydra, we'll need an available instance of Redis.  Let's look at two ways to address this requirement.
 
-The first and production friendly method is to use a hosted Redis cluster, such as Amazon's ElasticCache for Redis or the RedisLabs service. For our example here the easiest approach will be to head over to RedisLabs and setup a free trial instance. The process takes just a few minutes and you'll end up with a Redis connection string that you can use with your test cluster.
+The first and production friendly method is to use a hosted Redis cluster, such as Amazon's ElasticCache for Redis or the [RedisLabs](https://redislabs.com/) service. For our example here the easiest approach will be to head over to RedisLabs and setup a free trial instance. The process takes just a few minutes and you'll end up with a Redis connection string that you can use with your test cluster.
 
-The second method will be to use our `create-node` script to create an new EC2 instance in your VPC environment.  Doing this is also surprising easy - but more work than just using RedisLabs.
+The second method is the one we saw in the first article in this series.  I'll recap the steps here.
 
-```shell
-$ ./create-node redis
-```
+First, sign into AWS and navigate over to the `EC2 Dashboard`. Once there click on the "Launch Instance" button. On the page that loads select the AWS Marketplace tab. You should see a screen like this:
 
-We can then ssh into the machine using:
+> <img src="./AWS-choose-ami.png"/>
 
-```shell
-$ docker-machine ssh redis
-```
+Search for ECS Optimized to locate the Amazon ECS-Optimized AMI. Amazon created this image for use with its EC2 Container Service. 
 
-Once inside, check to see what user you are:
+For now, select Amazon ECS-Optimized AMI and create an EC2 t2.micro instance. 
 
-```shell
-$ whoami
-ubuntu
-```
+There are a few things you'll want to do:
 
-Then grant that add that user to the docker group:
+1. Use the Network VPC you selected when you setup the `create-node` shell script
+2. Set Auto-assign Public IP to `Enabled`
+3. Before launching, you'll want to create security group that allows you SSH (naturally) and opens the default Redis port (6379) restricted to your laptop.  This will be useful for testing - but won't be required by our microservices which will instead use the private network.
 
-```shell
-$ sudo usermod -a -G docker ubuntu
-```
+You can choose the defaults for the remaining options.
 
-Then install Redis:
+Once the EC2 instance is ready you can SSH into it to install a Redis container.
 
 ```shell
-$ sudo docker pull redis:3.0.7
+$ sudo usermod -a -G docker ec2-user
 $ sudo mkdir /data
+$ docker pull redis:3.0.7
 ```
 
-In order to ensure that Redis restarts on reboots we'll need to make sure the container starts as a system service.
+Next we need to edit the /etc/rc.local file:
 
 ```shell
-$ cd /etc/systemd/system/
-$ sudo vi redis.service
+$ sudo vi /etc/rc.local
 ```
 
-In your new `redis.service` file add the following lines: 
+and append the following lines:
 
 ```
-[Unit]
-Description=Redis container
-Requires=docker.service
-After=docker.service
-
-[Service]
-Restart=always
-TimeoutStartSec=0
-ExecStart=/usr/bin/docker run -d -p 6379:6379 --restart always -v /data:/data --name redis redis:3.0.7
-ExecStop=/usr/bin/docker stop -t 2 redis
-ExecStopPost=/usr/bin/docker rm -f redis
-
-[Install]
-WantedBy=default.target
+docker rm -f redis
+docker run -d -p 6379:6379 --restart always -v /data:/data --name redis redis:3.0.7
 ```
 
-Save that file and tell systemd that you'd like to start and enable the new redis service on boot. 
+After saving your changes you can bounce the box: `sudo reboot`. On restart your machine should be running a Redis instance.
 
-```shell
-$ sudo systemctl daemon-reload
-$ sudo systemctl start redis.service
-$ sudo systemctl enable redis.service
-Created symlink from /etc/systemd/system/default.target.wants/redis.service to /etc/systemd/system/redis.service.
-```
-
-You can then reboot the box to lunch it with the Redis container.
-
-```shell
-$ sudo reboot
-```
-
-Now, I know what you're thinking! - I should have just used RedisLabs. But seriously, it's not too bad. Besides, using the above method you'll be able to add other resources such as databases. The resources won't live in our Docker cluster, but will be accessible within the same VPC. Again, this is a great way to test our cluster, but not recommended for production use.
-
+Now, I know what you're thinking! - *"I should have just used RedisLabs"* . But seriously, it's not too bad. Besides, using the above method you'll be able to add other resources such as databases. The resources won't live in our Docker cluster, but will be accessible within the same VPC. Again, this is a great way to test our cluster, but not recommended for production use.
 
 ### Testing our Redis setup
 
+You can test your Redis instance by obtaining the remote IP address from the EC2 Dashboard.
+
+If you have `redis-cli` installed you can just connect to the instance using something like:
+
+```shell
+$ redis-cli -h 52.3.201.66
+```
+
+If you don't have redis-cli installed you can use telnet to interact with Redis:
+
+```shell
+$ telnet 52.3.201.66 6379
+```
+
+Then just type: `info`. If got output instead of a connection closed message then Redis is probably running.
 
 ## Creating and configuring the swarm
 
