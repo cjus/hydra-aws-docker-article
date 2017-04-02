@@ -1,39 +1,40 @@
 # Deploying Node Microservices to AWS using Docker (part two)
 
-In [part one](https://community.risingstack.com/deploying-node-js-microservices-to-aws-using-docker/) of this series we looked at creating a simple microservice and packaging it into a Docker container. We also looked at deploying the container to AWS using Amazon's ECS optimized Linux AMI - which has the Docker engine pre-installed.
+In [part one](https://community.risingstack.com/deploying-node-js-microservices-to-aws-using-docker/) of this series, we looked at creating a simple microservice and packaging it into a Docker container. We also looked at deploying the container to AWS using Amazon's ECS optimized Linux AMI - which has the Docker engine pre-installed.
 
-In this post we'll create a Docker Swarm cluster almost entirely from the command line! In the process we'll deploy multiple services and introduce application and message-based load balancing.
+In this post, we'll create a Docker Swarm cluster almost entirely from the command line! In the process, we'll deploy multiple services and introduce application and message-based load balancing.
 
 The resulting architecture will be quite scalable - unless of course you're Netflix and have Netflix size problems.
 
-In any case the approach we'll look at here can be further scaled in complexity to accommodate your specific needs.
+In any case, the approach we'll look at here can be further scaled in complexity to accommodate your specific needs.
 
 Let's get started.
 
 ## We'll begin with the end in mind
 
-We're going to build an eight-node cluster accessible via an Amazon Application Load Balancer (ALB). Our cluster will accept HTTP traffic and load balance between three master nodes which host our service-aware Application API Gateway, [hydra-router](https://github.com/flywheelsports/hydra-router). Hydra-router, itself a microservice, will be the only service listening on port 80.  It's responsible for routing service calls to individual services within the cluster.
+Our end-goal is to build an eight-node cluster accessible via an Amazon Application Load Balancer (ALB). Our cluster will accept HTTP traffic and load balance between three master nodes which host our service-aware Application API Gateway, [hydra-router](https://github.com/flywheelsports/hydra-router). Hydra-router, itself a microservice, will be the only service listening on port 80.  It's responsible for routing service calls to individual services within the cluster.
 
 Hydra-router will only run on master nodes 01 - 03, which are directly accessible via the ALB.  Our microservices will run on worker nodes 01-05.  Services running on worker nodes will not publish ports for use outside of the network that the container is running in.
 
 <img src="./swarm-roles.png" alt="swarm roles" width="600px" />
 
-Referring to the above diagram, the master nodes in the Ingress network communicate with one another in support of high availability. If one master node dies another is elected the active master. We can also scale up or down as required.  Each Hydra-router running inside of a master node is able to communicate with microservices running in containers on the `service network`. Additionally, each service is able to communicate with the outside world (external API services) and with its internal peers and hydra-routers.
+Referring to the above diagram, the master nodes in the Ingress network communicate with one another in support of high availability. If one master node dies, another is elected the active master. We can also scale up or down as required.  Each Hydra-router running inside of a master node can communicate with microservices running in containers on the `service network`. Additionally, each service can communicate with the outside world (external API services) and with its internal peers and hydra-routers.
 
 Using Docker swarm mode, we'll be able to scale our services with a simple command. We'll also be able to add and remove EC2 instances participating in a swarm and redistribute our services accordingly.
 
 ### AWS setup
 
-We're going to use Amazon Web Services cloud.  Just as in the first part of this series, I have to assume that you're somewhat familiar with AWS. You should be comfortable creating EC2 instances and connecting to them using SSH. 
+We're going to use Amazon Web Services. Just as in the first part of this series, I have to assume that you're somewhat familiar with AWS. You should be comfortable creating EC2 instances and connecting to them using SSH.
 
-Our initial goal with AWS is to be able to create machines from the commandline.
+Our initial goal with AWS is to be able to launch machine instances from the command line.
+
 In preparation for this, we'll first create a new [IAM role](http://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html) for a programmatic user with `AmazonEC2FullAccess` credentials.
 
 > <img src="./IAM_Management_Console.png" alt="swarm roles" width="600px" />
 
 Make sure to grab the Access Key and Secret Key as you'll need those shortly.
 
-To assist with the creation and configuration of EC2 instances we'll create a shell script called `create-node` which uses the [docker-machine](https://docs.docker.com/machine/overview/) command to create an EC2 instance and install the docker engine.
+To assist with the creation and configuration of EC2 instances, we'll create a shell script called `create-node` which uses the [docker-machine](https://docs.docker.com/machine/overview/) command to create an EC2 instance and install the Docker engine.
 
 ```shell
 #!/bin/bash
@@ -58,7 +59,7 @@ docker-machine create --driver amazonec2 \
 echo "${NODE_NAME} should be available in a minute"
 ```
 
-In this script, we've defined the AWS Access token key `AWS_AK` and the Secret token key `AWS_SK`. Additionally, we define the AWS VPC id `AWS_VPC` and the AWS Region `AWS_REGION`.  These tokens can be defined and exported outside of the script as a good practice using environment variables. The keys are embedded in this example for clarity.
+In this script, we've defined the AWS Access token key `AWS_AK` and the Secret token key `AWS_SK`. Replace the fake values shown with the access key and secret key you copied earlier. Additionally, we define the AWS VPC id `AWS_VPC` and the AWS Region `AWS_REGION`.  Provide values which reflect your Amazon setup. As a best practice, use environment variables to define and export those tokens outside of the script. The values are included in the script to keep things simple.
 
 The above script also allows you to specify the type of EC2 instance to use. The default is `t2.small` but could be `t2.micro` or larger depending on your needs.
 
@@ -75,17 +76,17 @@ As a complement to the above script, we'll also create a `remove_node` script.
 docker-machine rm -f $1
 ```
 
-So we can remove EC2 instances created using `create-node`:
+So we can remove EC2 instances created using `remove-node`:
 
 ```shell
 $ ./remove_node node01
 ```
 
-If you haven't created EC2 instances in this way then those two scripts should cover the costs of this article!  Read on, there's a whole lot more coolness to come.
+If you haven't created EC2 instances in this way, then those two scripts should cover the costs of this article!  Read on; there's a whole lot more coolness to come.
 
 ### Creating EC2 Nodes
 
-As a recap here is the breakdown of the EC2 instances we'll create.
+As a recap here is the breakdown of the EC2 instances, we'll create.
 
 <img src="./swarm.png" alt="swarm" width="500px" />
 
@@ -106,9 +107,9 @@ do
   ./create-node worker0$i t2.small
 done
 ```
-> 🍺 **PubTip**: Consider running each section above in different terminal shells. At this stage, the master and worker nodes do not depend on one another and can be created in parallel.
+> 🍺 **PubTip**: Consider running each section above in different terminal shells. At this stage, the master and worker nodes do not depend so both can run in parallel.
 
-Once the above commands complete we can view a list of created machines.
+Once the above commands complete, we can view a list of machines.
 
 ```shell
 $ docker-machine ls -t "30"
@@ -135,32 +136,32 @@ With these change in place, we can proceed to configure our swarm.
 
 Because our sample microservices are build using Hydra, we'll need an available instance of Redis.  Let's look at two ways to address this requirement.
 
-The first and production friendly method is to use a hosted Redis cluster, such as Amazon's ElasticCache for Redis or the [RedisLabs](https://redislabs.com/) service. For our example here the easiest approach will be to head over to RedisLabs and setup a free trial instance. The process takes just a few minutes and you'll end up with a Redis connection string that you can use with your test cluster.
+The first, and production friendly method is to use a hosted Redis cluster, such as Amazon's ElasticCache for Redis or the [RedisLabs](https://redislabs.com/) service. The easiest approach will be to head over to RedisLabs and setup a free trial instance. The process takes just a few minutes, and you'll end up with a Redis connection string that you can use with your test cluster.
 
 The second method is the one we saw in the first article in this series.  I'll recap the steps here.
 
-First, sign into AWS and navigate over to the `EC2 Dashboard`. Once there click on the "Launch Instance" button. On the page that loads select the AWS Marketplace tab. You should see a screen like this:
+First, sign into AWS and navigate over to the `EC2 Dashboard`. Once there click on the "Launch Instance" button. On the page that loads select the AWS Marketplace tab. You should see a screen like this:
 
 > <img src="./AWS-choose-ami.png"/>
 
-Search for ECS Optimized to locate the Amazon ECS-Optimized AMI. Amazon created this image for use with its EC2 Container Service. 
+Search for ECS Optimized to locate the Amazon ECS-Optimized AMI. Amazon created this image for use with its EC2 Container Service.
 
-For now, select Amazon ECS-Optimized AMI and create an EC2 t2.micro instance. 
+For now, select Amazon ECS-Optimized AMI and create an EC2 t2.micro instance.
 
 There are a few things you'll want to do:
 
-1. Use the Network VPC you selected when you setup the `create-node` shell script
+1. Use the Network VPC you selected earlier when you set up the `create-node` shell script
 2. Set Auto-assign Public IP to `Enabled`
-3. Before launching, you'll want to create security group that allows you SSH (naturally) and opens the default Redis port (6379) restricted to your laptop.  This will be useful for testing - but won't be required by our microservices which will instead use the private network.
+3. Before launching, you'll want to create a security group that allows you SSH (naturally) and opens the default Redis port (6379) restricted to your laptop.  The port will be useful for testing - but our microservices will use the private network instead.
 
-You can choose the defaults for the remaining options.
+You can choose the defaults for the remaining options.
 
-Once the EC2 instance is ready you can SSH into it to install a Redis container.
+Once the EC2 instance is ready, you can SSH into it to install a Redis container.
 
 ```shell
 $ sudo usermod -a -G docker ec2-user
 $ sudo mkdir /data
-$ docker pull redis:3.0.7
+$ docker pull redis:3.0.7                    
 ```
 
 Next we need to edit the /etc/rc.local file:
@@ -176,13 +177,13 @@ docker rm -f redis
 docker run -d -p 6379:6379 --restart always -v /data:/data --name redis redis:3.0.7
 ```
 
-After saving your changes you can bounce the box: `sudo reboot`. On restart your machine should be running a Redis instance.
+After saving your changes, you can bounce the box: `sudo reboot`. On restart, your machine should be running a Redis instance.
 
-Now, I know what you're thinking! - *"I should have just used RedisLabs"* . But seriously, it's not too bad. Besides, using the above method you'll be able to add other resources such as databases. The resources won't live in our Docker cluster, but will be accessible within the same VPC. Again, this is a great way to test our cluster, but not recommended for production use.
+Now, I know what you're thinking! - *"I should have just used RedisLabs"* . But seriously, it's not too bad. Besides, using the above method, you'll be able to add other resources such as databases. The resources won't live in our Docker cluster but will be accessible within the same VPC. Again, this is a excellent way to test our cluster, but not recommended for production use.
 
 ### Testing our Redis setup
 
-You can test your Redis instance by obtaining the remote IP address from the EC2 Dashboard.
+You can test access to your Redis instance by obtaining the remote IP address from the EC2 Dashboard.
 
 If you have `redis-cli` installed you can just connect to the instance using something like:
 
@@ -196,11 +197,11 @@ If you don't have redis-cli installed you can use telnet to interact with Redis:
 $ telnet 52.3.201.66 6379
 ```
 
-Then just type: `info`. If got output instead of a connection closed message then Redis is probably running.
+Then just type: `info`. If got output instead of a connection closed message, then Redis is probably running.
 
 ## Creating and configuring the swarm
 
-We're now ready to configure our swarm.  This process will involve creating a swarm manager and assigning workers.
+We're now ready to set up our swarm.  This process will involve creating a swarm manager and assigning workers.
 
 We begin configuring our swarm by requesting the external IP address of our the master01 node.
 
@@ -257,7 +258,7 @@ f15m9npvwumliqoe6wzor8tvh *  master01  Ready   Active        Leader
 t77rsrfdrq9u3v4rftldyzsgj    master02  Ready   Active        Reachable
 ye7iq8hswgacvkz8il51v6je1    master03  Ready   Active        Reachable
 ```
-Here we see that our master01 node is the leader, but should something happen to it - one of the other managers will be elected the new leader.  If our master01 node later recovers from its untimely accident it won't resume as the leader but it will be marked as Reachable and eligible for promotion should something happen to another master node.
+Here we see that our master01 node is the leader, but should something happen to it - one of the other managers will be elected the new leader.  If our master01 node later recovers from its untimely accident, it won't resume as the leader, however it will be marked as reachable and eligible for promotion should something happen to another master node.
 
 Now we're ready to configure our worker nodes.
 
@@ -270,7 +271,7 @@ do
 done
 ```
 
-From a manager node, we can see the status of our swarm cluster. We see that our master01 node is the leader, with two mangers reachable and waiting in the wings for their shot at the corner office.  We also see that none of our worker nodes are managers.
+From a manager node, we can see the status of our swarm cluster. We see that our master01 node is the leader, with two managers reachable and waiting in the wings for their shot at the corner office.  We also see that none of our worker nodes are managers.
 
 ```
 $ sudo docker node ls -t "30"
@@ -287,7 +288,7 @@ ye7iq8hswgacvkz8il51v6je1    master03  Ready   Active        Reachable
 
 ### Swarm networking
 
-At this stage, we have EC2 instances participating in a swarm as either managers or workers. We're not ready to create a network on which each node can communicate.  This type of network is referred to as an overlay network.
+At this stage, we have EC2 instances participating in a swarm as either managers or workers. We're not ready to create a network on which each node can communicate.  This is known as an overlay network.
 
 ```shell
 $ docker network create servicenet \
@@ -355,11 +356,11 @@ docker run -d \
 
 This can work fine in dockerized deployments which use ECS optimized EC2 images.  You simply have to ensure that the config files are present on the machine before running the dockerized containers.
 
-However, this isn't convenient for use with Docker Swarm where you don't actually know what machine your container will run on.
+However, this isn't convenient for use with Docker Swarm since you don't know what machine your container will run on.
 
 Starting with [hydra](https://github.com/flywheelsports/hydra) 0.15.10 and [hydra-express](https://github.com/flywheelsports/hydra-express)  0.15.11 your hydra service can request its config directly from your Redis instance. Naturally, that implies that you've loaded the config into Redis in the first place.
 
-To do this you'll need [hydra-cli](https://github.com/flywheelsports/hydra-cli) version 0.5.4 or greater.
+To do this, you'll need [hydra-cli](https://github.com/flywheelsports/hydra-cli) version 0.5.4 or greater.
 
 ```shell
 $ hydra-cli cfg push hydra-router:0.15.4 config.json
@@ -377,7 +378,7 @@ This is useful when you want to make changes to an existing config file or when 
 
 ## Services
 
-We can now use the Docker service create command to push containers into our swarm. In the example below we specify `--env HYDRA_REDIS` to point to the Redis server the service will use to retrieve its configuration file from.  In production, the Redis instance would likely be an Amazon Elastic Cache cluster or one at RedisLabs.
+We can now use the Docker service create command to push containers into our swarm. In the example below we specify `--env HYDRA_REDIS` to point to the Redis server the service will use to retrieve its configuration file.  In production, the Redis instance would likely be an Amazon Elastic Cache cluster or one at RedisLabs.
 
 ```shell
 $ docker service create \
@@ -392,7 +393,7 @@ $ docker service create \
     flywheelsports/hydra-router:1.0.9
 ```
 
-> When a service is created which uses `--publish` it is automatically added to the `ingress` network. This is because publishing a port says you want the container to be remotely accessible.
+> A service is added to the ingress network when you use `--publish`. The act of publishing a port indicates you want the container to be remotely accessible.
 
 ```shell
 $ docker login
@@ -411,15 +412,15 @@ $ docker service create \
 
 #### Working with private containers
 
-It's likely, that at some point, you'll need to use private containers for one or more of your services. To do this you first sign into a master node and then issue a `docker login` command. 
+It's likely, that at some point you'll need to use private containers for one or more of your services. To do this, you first sign into a master node and then issue a `docker login` command.
 
 ```shell
 $ docker login
 ```
 
-Then issue the docker service command with the `--with-registry-auth` flag. This tells docker to use the credential we provided during the login.
+Then issue the docker service command with the `--with-registry-auth` flag to tell Docker to use the credential we provided during the login.
 
-Here's the full command: 
+Here's the full command:
 
 ```shell
 $ docker service create \
@@ -478,8 +479,7 @@ tan1qxhlu8sj  viz             replicated  1/1       manomarks/visualizer:latest
 
 ## Test drive
 
-In order to try all of this out you'll need to obtain the IP address of your Amazon ALB from the AWS dashboard.
-
+To try all of this out, you'll need to obtain the IP address of your Amazon ALB from the AWS dashboard.
 
 <img src="./EC2_AEB_Console.png" alt="networks" width="700px" />
 
@@ -488,4 +488,3 @@ You can direct traffic to the load balancer doing something like this:
 <img src="./hydra-alb-test_us-east-1_elb_amazonaws_com_v1_hello_test.png" alt="networks" width="700px" />
 
 Refreshing the browser page would display different service IDs as the traffic is load balanced to our five hello services.
-
