@@ -109,7 +109,7 @@ do
   ./create-node worker0$i t2.small
 done
 ```
-> 🍺 **PubTip**: Consider running each section above in different terminal shells. At this stage, the master and worker nodes do not depend so both can run in parallel.
+> 🍺 **PubTip**: Consider running each section above in different terminal shells. At this stage, the master and worker nodes do not depend on one another so both can run in parallel.
 
 Once the above commands complete, we can view a list of machines.
 
