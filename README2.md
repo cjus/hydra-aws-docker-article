@@ -84,7 +84,7 @@ So we can remove EC2 instances created using `remove-node`:
 $ ./remove_node node01
 ```
 
-If you haven't created EC2 instances in this way, then those two scripts should cover the costs of this article!  Read on; there's a whole lot more coolness to come.
+If you haven't created EC2 instances in this way, then those two scripts should cover the costs of this article!  Read on; there's a whole lot more to come.
 
 ### Creating EC2 Nodes
 
@@ -109,7 +109,7 @@ do
   ./create-node worker0$i t2.small
 done
 ```
-> 🍺 **PubTip**: Consider running each section above in different terminal shells. At this stage, the master and worker nodes do not depend on one another so both can run in parallel.
+> 🍺 **PubTip**: Consider running each section above in different terminal shells. At this stage, the master and worker nodes do not depend on one another so both can be created in parallel.
 
 Once the above commands complete, we can view a list of machines.
 
@@ -128,7 +128,7 @@ Here's a summary of the changes we need to make:
   * TCP and UDP port 7946 for communication among nodes
   * TCP and UDP port 4789 for overlay network traffic
 
-Here is what your enhanced security group should look like on AWS:
+Your enhanced security group should include:
 
 > <img src="./EC2_DockerSecurityGroup.png" alt="AWS security group" />
 
@@ -136,7 +136,7 @@ With these change in place, we can proceed to configure our swarm.
 
 ## Redis setup
 
-Because our sample microservices are build using Hydra, we'll need an available instance of Redis.  Let's look at two ways to address this requirement.
+Because our sample microservices are built using Hydra, we'll need an accessible instance of Redis.  Let's look at two ways to address this requirement.
 
 The first, and production friendly method is to use a hosted Redis cluster, such as Amazon's ElasticCache for Redis or the [RedisLabs](https://redislabs.com/) service. The easiest approach will be to head over to RedisLabs and setup a free trial instance. The process takes just a few minutes, and you'll end up with a Redis connection string that you can use with your test cluster. The connection string will look something like this: `redis-16122.c1.us-east-1-3.ec2.cloud.redislabs.com:16883` and you just add that to your service's `config/config.json` file.
 
@@ -152,7 +152,7 @@ First, sign into AWS and navigate over to the `EC2 Dashboard`. Once there click 
 
 > <img src="./AWS-choose-ami.png"/>
 
-Search for ECS Optimized to locate the Amazon ECS-Optimized AMI. Amazon created this image for use with its EC2 Container Service.
+Search for `ECS Optimized` to locate the Amazon ECS-Optimized AMI. Amazon created this image for use with its EC2 Container Service.
 
 For now, select Amazon ECS-Optimized AMI and create an EC2 t2.micro instance.
 
@@ -160,7 +160,7 @@ There are a few things you'll want to do:
 
 1. Use the Network VPC you selected earlier when you set up the `create-node` shell script
 2. Set Auto-assign Public IP to `Enabled`
-3. Before launching, you'll want to create a security group that allows you SSH (naturally) and opens the default Redis port (6379) restricted to your laptop.  The port will be useful for testing - but our microservices will use the private network instead.
+3. Before launching, you'll want to create a security group that allows you to SSH (naturally) and opens the default Redis port (6379) restricted to your laptop.  The port will be useful for testing.
 
 You can choose the defaults for the remaining options.
 
@@ -400,6 +400,8 @@ We can now use the Docker service create command to push containers into our swa
 $ docker service create \
     --name hydra-router \
     --network servicenet \
+    --restart-condition any \
+    --restart-max-attempts 5 \    
     --update-delay 10s \
     --constraint=node.role==manager \
     --env HYDRA_REDIS_URL="redis://10.0.0.154:6379/15" \
@@ -409,13 +411,15 @@ $ docker service create \
     flywheelsports/hydra-router:1.0.9
 ```
 
-> A service is added to the ingress network when you use `--publish`. The act of publishing a port indicates you want the container to be remotely accessible.
+> A service is added to the ingress network when you use `-p` or `--publish`. The act of publishing a port indicates you want the container to be remotely accessible.
 
 ```shell
 $ docker login
 $ docker service create \
     --name hello-service \
     --network servicenet \
+    --restart-condition any \
+    --restart-max-attempts 5 \    
     --update-delay 10s \
     --constraint=node.role==worker \
     --env HYDRA_REDIS_URL="redis://10.0.0.154:6379/15" \
@@ -424,7 +428,7 @@ $ docker service create \
     cjus/hello-service:0.0.7
 ```
 
-> Creating a service which does not use `--publish` places the service in the `servicenet`, our private subnet. The service can still listen on a port for inter-service communication.
+> Creating a service which does not use `-p` or `--publish` places the service in the `servicenet`, our private subnet. The service can still listen on a port for inter-service communication.
 
 Both the hydra-router and hello-service containers above are publicly available - if you'd like to try this yourself.
 
