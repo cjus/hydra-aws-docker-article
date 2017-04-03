@@ -1,4 +1,5 @@
 # Deploying Node Microservices to AWS using Docker (part two)
+> ### Work-in-progress
 
 In [part one](https://community.risingstack.com/deploying-node-js-microservices-to-aws-using-docker/) of this series, we looked at creating a simple microservice and packaging it into a Docker container. We also looked at deploying the container to AWS using Amazon's ECS optimized Linux AMI - which has the Docker engine pre-installed.
 
@@ -147,7 +148,7 @@ The first, and production friendly method is to use a hosted Redis cluster, such
 
 The second method is the one we saw in the first article in this series.  I'll recap the steps here.
 
-First, sign into AWS and navigate over to the `EC2 Dashboard`. Once there click on the "Launch Instance" button. On the page that loads select the AWS Marketplace tab. You should see a screen like this:
+First, sign into AWS and navigate over to the `EC2 Dashboard`. Once there click on the "Launch Instance" button. On the page that loads select the AWS Marketplace tab. You should see a screen like this:
 
 > <img src="./AWS-choose-ami.png"/>
 
