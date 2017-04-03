@@ -162,7 +162,7 @@ There are a few things you'll want to do:
 2. Set Auto-assign Public IP to `Enabled`
 3. Before launching, you'll want to create a security group that allows you SSH (naturally) and opens the default Redis port (6379) restricted to your laptop.  The port will be useful for testing - but our microservices will use the private network instead.
 
-You can choose the defaults for the remaining options.
+You can choose the defaults for the remaining options.
 
 Once the EC2 instance is ready, you can SSH into it to install a Redis container.
 
