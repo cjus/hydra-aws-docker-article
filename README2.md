@@ -1,13 +1,10 @@
 # Deploying Node Microservices to AWS using Docker (part two)
-> ### Work-in-progress
 
 In [part one](https://community.risingstack.com/deploying-node-js-microservices-to-aws-using-docker/) of this series, we looked at creating a simple microservice and packaging it into a Docker container. We also looked at deploying the container to AWS using Amazon's ECS optimized Linux AMI - which has the Docker engine pre-installed.
 
-In this post, we'll create a Docker Swarm cluster almost entirely from the command line! In the process, we'll deploy multiple services and introduce application and message-based load balancing.
+In this post, we'll create a Docker Swarm cluster almost entirely from the command line! In the process, we'll deploy multiple services and introduce application and message-based load balancing. We'll continue using [Hydra](https://www.npmjs.com/package/hydra) because it has the singular goal of making microservices approachable!
 
-The resulting architecture will be quite scalable - unless of course you're Netflix and have Netflix size problems.
-
-In any case, the approach we'll look at here can be further scaled in complexity to accommodate your specific needs.
+The architecture outlined in this article will be quite scalable - unless of course you're Netflix and have Netflix size problems. In any case, the approach we'll look at here can be further scaled in complexity to accommodate your specific needs.
 
 Let's get started.
 
@@ -58,10 +55,10 @@ docker-machine create --driver amazonec2 \
     --amazonec2-instance-type "${MACHINE_TYPE}" \
     ${NODE_NAME}
 
-echo "${NODE_NAME} should be available in a minute"
+echo "${NODE_NAME} should be available in a minute."
 ```
 
-In this script, we've defined the AWS Access token key `AWS_AK` and the Secret token key `AWS_SK`. Replace the fake values shown with the access key and secret key you copied earlier. Additionally, we define the AWS VPC id `AWS_VPC` and the AWS Region `AWS_REGION`.  Provide values which reflect your Amazon setup. As a best practice, use environment variables to define and export those tokens outside of the script. The values are included in the script to keep things simple.
+In this script, we've defined the AWS Access token key `AWS_AK` and the Secret token key `AWS_SK`. Replace the fake values shown with the access key and secret key you copied earlier. Additionally, we define the AWS VPC id `AWS_VPC` and the AWS Region `AWS_REGION`.  Provide values which reflect your Amazon setup. As a best practice, use environment variables to define and export those tokens outside of the script. The values are included in the script for clarity.
 
 The above script also allows you to specify the type of EC2 instance to use. The default is `t2.small` but could be `t2.micro` or larger depending on your needs.
 
@@ -187,7 +184,7 @@ docker run -d -p 6379:6379 --restart always -v /data:/data --name redis redis:3.
 
 After saving your changes, you can bounce the box: `sudo reboot`. On restart, your machine should be running a Redis instance.
 
-Now, I know what you're thinking! - *"I should have just used RedisLabs"* . But seriously, it's not too bad. Besides, using the above method, you'll be able to add other resources such as databases. The resources won't live in our Docker cluster but will be accessible within the same VPC. Again, this is a excellent way to test our cluster, but not recommended for production use.
+Now, I know what you're thinking! - *"I should have just used RedisLabs"* . But seriously, it's not too bad. Besides, using the above method, you'll be able to add other resources such as databases. The resources won't live in our Docker cluster but will be accessible within the same VPC. Again, this is an excellent way to test our cluster, but not recommended for production use.
 
 ### Testing our Redis setup
 
@@ -377,7 +374,7 @@ Starting with [hydra](https://github.com/flywheelsports/hydra) 0.15.10 and [hydr
 To do this, you'll need [hydra-cli](https://github.com/flywheelsports/hydra-cli) version 0.5.4 or greater.
 
 ```shell
-$ hydra-cli cfg push hydra-router:0.15.4 config.json
+$ hydra-cli cfg push hydra-router:1.0.12 config.json
 ```
 
 You're expected to provide the service name separated by a version string and a local config.json file whose contents will be uploaded.
@@ -385,7 +382,7 @@ You're expected to provide the service name separated by a version string and a 
 Later you can retrieve a stored config using:
 
 ```shell
-$ hydra-cli cfg pull hydra-router:0.15.4 > config.json
+$ hydra-cli cfg pull hydra-router:1.0.12 > config.json
 ```
 
 This is useful when you want to make changes to an existing config file or when you'd like to upload a new config based on an older copy.
@@ -405,10 +402,10 @@ $ docker service create \
     --update-delay 10s \
     --constraint=node.role==manager \
     --env HYDRA_REDIS_URL="redis://10.0.0.154:6379/15" \
-    --env HYDRA_SERVICE="hydra-router:0.15.4" \
+    --env HYDRA_SERVICE="hydra-router:1.0.12" \
     --publish 80:80 \
     --replicas=3 \
-    flywheelsports/hydra-router:1.0.9
+    flywheelsports/hydra-router:1.0.12
 ```
 
 > A service is added to the ingress network when you use `-p` or `--publish`. The act of publishing a port indicates you want the container to be remotely accessible.
@@ -449,6 +446,8 @@ $ docker service create \
     --name hello-service \
     --network servicenet \
     --update-delay 10s \
+    --restart-condition any \
+    --restart-max-attempts 5 \        
     --with-registry-auth \
     --constraint=node.role==worker \
     --env HYDRA_REDIS_URL="redis://10.0.0.154:6379/15" \
@@ -486,7 +485,7 @@ You might be wondering what happens when you need to update a running service. S
 
 ```
 $ docker service update \
-    --image flywheelsports/hydra-router:1.0.9 \
+    --image flywheelsports/hydra-router:1.0.12 \
     hydra-router
 ```
 
@@ -523,11 +522,66 @@ We'll grab the code from the [earlier repo](https://github.com/cjus/hydra-hpp) a
 
 Our new hot potato service has a single endpoint `/v1/hpp/startgame` which will cause the service which receives that request to start a new game. Internally, the hpp-service instances will use hydra messaging (built on redis pubsub) to send non-http messages to one another.
 
+### Configuring our player service
 
+```javascript
+{
+  "environment": "development",
+  "hydra": {
+    "serviceName": "hpp-service",
+    "serviceIP": "",
+    "servicePort": 9000,
+    "serviceType": "game",
+    "serviceDescription": "Plays hot potato game",
+    "redis": {
+      "url": "redis://10.0.0.154:6379/15"
+    }
+  }
+}
+```
 
-{ WIP: MORE CONTENT HERE!!! }
+After modifying the default config.json file to include the location of our Redis instance we're not ready to upload the config to Redis using the hydra-cli app.
 
+```shell
+$ hydra-cli cfg push hpp-service:0.0.1 config.json
+```
 
-## Next steps
+Now we're ready to launch player instances.
 
-This concludes our two-part series on deploying microservices to AWS using Docker Containers. However, this isn't an end - but rather a small beginning. Node-based microservices and containerization continues to be an evolving story. At the time of this writing, there is no shortage of approaches to accomplishing the goals outlined in this series. At best this series gave you a sense of what's involved and helped you on your journey.
+### Launching player instances
+
+We'll launch containers the same way we've done earlier. In this case, we'll specify five instances using the replicas option.
+
+```shell
+$ docker service create \
+    --name hpp-service \
+    --network servicenet \
+    --restart-condition any \
+    --restart-max-attempts 5 \
+    --update-delay 10s \
+    --constraint=node.role==worker \
+    --env HYDRA_REDIS_URL="redis://10.0.0.154:6379/15" \
+    --env HYDRA_SERVICE="hpp-service:0.0.1" \
+    --replicas=5 \
+    cjus/hpp-service:0.0.1
+```
+
+You should then see the new `hpp-service` instances appear in the swarm visualizer. 
+
+![](./visualizer2.png)
+
+### Starting a game!
+
+To start a game we just need to access the ALB and with the route of our Hot Potato Service. The game runs for about 15 seconds, so we have to wait a bit for a reply. The IDs listed in square brackets are the Hydra service instance IDs for the services which participated in the game. You might be wondering why we only see three here? The reason is that the game is time limited with built-in delays so you'd have to increase the game duration to see more nodes participating. Running the game a second time should reveal new nodes.
+
+![](./swarm_hpp_startgame.png)
+
+To prove that this is actually working we can ask the API Gateway (HydraRouter) for a list of service routes. Using the listing, we can locate each of the instances which participated in the game.
+
+![](./hydra-alb-us-east-1_elb_v1_router_list_nodes.png)
+
+## Wrap-up
+
+In this article, we looked at setting up a Docker Swarm on AWS. We created and deployed Microservices built using Hydra - which just adds a microservice layer above ExpressJS. The [HydraRouter](https://github.com/flywheelsports/hydra-router) acted as a service-aware API Gateway which allowed us to call microservices without knowing their location within the swarm. Our Hot Potato game service demonstrated inter-service messaging using Hydra.
+
+This concludes our two-part series. However, this isn't an end - but rather a small beginning. Node-based microservices and containerization continue to be an evolving story. At the time of this writing, there is no shortage of ways of accomplishing the goals outlined in this series. 
