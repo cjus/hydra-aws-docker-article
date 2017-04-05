@@ -579,8 +579,9 @@ To prove that this is actually working we can ask the API Gateway (HydraRouter) 
 
 ## Wrap-up
 
-In this article, we stepped through creating a Docker Swarm cluster on AWS. We created and deployed microservices built using Hydra - which adds a microservice layer above ExpressJS. We used the [Hydra-Router](https://github.com/flywheelsports/hydra-router) as a service-aware API Gateway to route calls to our microservices without knowing their location within the swarm. And, our Hot Potato game service demonstrated inter-service messaging within the cluster.
+In this article, we stepped through creating a Docker Swarm cluster on AWS. In the process, we created and deployed microservices built using Hydra - which adds a microservice layer above ExpressJS. We learned how Docker orchestration allows us to create services and easily scale them as needed. We used the [Hydra-Router](https://github.com/flywheelsports/hydra-router) as a service-aware API Gateway to route calls to our microservices without knowing their location within the swarm. And lastly, our Hot Potato game service demonstrated inter-service messaging within the cluster.
 
-This concludes our two-part series. However, this isn't an end - but rather a small beginning. Node-based microservices and containerization continue to be an evolving story. 
+This concludes our two-part series. However, this isn't an end - for many of us, this is just the beginning of our journey. Node-based microservices and containerization are a match made in heaven! 
 
-Containers used in this article can be found [here](https://hub.docker.com/u/cjus/) and [here](https://hub.docker.com/u/flywheelsports/). You can also review the code for the [hello-service](https://github.com/cjus/hello-service) and [hot potato service](https://github.com/cjus/hpp-service). If you have questions ping me on [twitter](https://twitter.com/cjus).
+---
+Containers used in this article can be found [here](https://hub.docker.com/u/cjus/) and [here](https://hub.docker.com/u/flywheelsports/). You can also review the code for the [hello-service](https://github.com/cjus/hello-service) and [hot potato service](https://github.com/cjus/hpp-service). If you have questions ping me on [twitter](https://twitter.com/cjus) - my DM is open!
