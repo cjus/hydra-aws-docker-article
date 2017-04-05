@@ -136,7 +136,7 @@ With these changes in place, we can proceed to configure our swarm.
 
 Because our sample microservices use Hydra, we'll need an accessible instance of Redis.  Let's look at two ways to address this requirement.
 
-The first, and more production friendly method is to use a hosted Redis cluster, such as Amazon's ElasticCache for Redis or the [RedisLabs](https://redislabs.com/) service. The easiest approach will be to head over to RedisLabs and setup a free trial instance. The process takes a few minutes, and you'll end up with a Redis connection string that you can use with your test cluster. The connection string will look something like this: `redis-16122.c1.us-east-1-3.ec2.cloud.redislabs.com:16883` and you add that to your service's `config/config.json` file.
+The first and more production friendly method is to use a hosted Redis cluster, such as Amazon's ElasticCache for Redis or the [RedisLabs](https://redislabs.com/) service. The easiest approach will be to head over to RedisLabs and setup a free trial instance. The process takes a few minutes, and you'll end up with a Redis connection string that you can use with your test cluster. The connection string will look something like this: `redis-16122.c1.us-east-1-3.ec2.cloud.redislabs.com:16883` and you add that to your service's `config/config.json` file.
 
 ```
 "redis": {
@@ -569,7 +569,7 @@ You should then see the new `hpp-service` instances appear in the swarm visualiz
 
 ### Starting a game!
 
-To start a game we need to access the ALB with the route of our Hot Potato Service. The game runs for about 15 seconds, so we have to wait a bit for a reply. The IDs listed in square brackets are the Hydra service instance IDs for the services which participated in the game. You might be wondering why we only see three here? The reason is that the game is time limited with built-in delays so you'd have to increase the game duration to see more nodes participating. Running the game a second time should reveal new nodes.
+To start a game, we need to access the ALB with the route of our Hot Potato Service. The game runs for about 15 seconds, so we have to wait a bit for a reply. The IDs listed in square brackets are the Hydra service instance IDs for the services which participated in the game. You might be wondering why we only see three here? The reason is that the game is time limited with built-in delays so you'd have to increase the game duration to see more nodes participating. Running the game a second time should reveal new nodes.
 
 ![](./swarm_hpp_startgame.png)
 
